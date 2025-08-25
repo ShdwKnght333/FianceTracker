@@ -1,21 +1,15 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { Animated, Button, Dimensions, FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Animated, Button, Dimensions, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { addFoodRating, getPopularPlaces } from '../lib/foodRatingService';
 import { ChipOption, Chips, ChipStyles } from "./components/Chips";
 
-const popularDescriptions = [
-  "Stationery",
-  "Gift",
-  "Charity",
-  "Tips",
-  "Snacks",
-  "Parking",
-  "Miscellaneous",
-  "Donation",
-  "Subscription",
-  "Repair",
-];
+// Dynamic place suggestions loaded from Supabase (FoodRating table)
+// Fallback to empty list if fetch fails. Fetched again when user types (debounced)
+// to provide type-ahead suggestions based on contains match.
+// Uses getPopularPlaces(prefix) which returns most frequent matches.
+// This replaces the previous hard-coded popularDescriptions array.
 
 export default function FoodRating() {
   const [rating, setRating] = useState<number | null>(null);
@@ -30,6 +24,12 @@ export default function FoodRating() {
   const [price, setPrice] = useState("");
   const [type, setType] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [popularPlaces, setPopularPlaces] = useState<string[]>([]);
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const foodTypes: ChipOption[] = [
     { label: 'Dose', icon: '🥞' },
     { label: 'Idli', icon: '🍛' },
@@ -93,9 +93,28 @@ export default function FoodRating() {
     }, [scaleAnim])
   );
 
-  const handleSubmit = () => {
-    const msg = `Type: ${type || '-'}\nPlace: ${place || '-'}\nItem: ${item || '-'}\nPrice: ${price || '-'}\nRating: ${rating ?? '-'} stars`;
-    alert(msg);
+  const handleSubmit = async () => {
+    setSubmitError(null);
+    setSubmitSuccess(false);
+    if (!type || !place || !item || !price || !rating) {
+      setSubmitError('All fields required including rating.');
+      return;
+    }
+    setSubmitting(true);
+    const { error } = await addFoodRating({
+      Place: place,
+      Item: item,
+      Type: type,
+      Price: parseFloat(price),
+      Rating: rating,
+    });
+    setSubmitting(false);
+    if (error) {
+      setSubmitError(error.message);
+      return;
+    }
+    setSubmitSuccess(true);
+    alert('Saved to Supabase');
     router.back();
   };
 
@@ -157,9 +176,21 @@ export default function FoodRating() {
     return t;
   };
 
-  const filteredSuggestions = place
-    ? popularDescriptions.filter(opt => opt.toLowerCase().includes(place.toLowerCase()))
-    : popularDescriptions;
+  const filteredSuggestions = popularPlaces;
+
+  // Fetch popular places (debounced on input change)
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoadingPlaces(true);
+      const { data } = await getPopularPlaces(place || undefined, 5);
+      if (data) setPopularPlaces(data.map(d => d.place));
+      setLoadingPlaces(false);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [place]);
 
   function handlePlaceChange(text: string) {
     setPlace(text);
@@ -172,95 +203,104 @@ export default function FoodRating() {
   }
 
   return (
-    <LinearGradient
-      colors={["#FFA726", "#FFEB3B", "#FFD600"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.gradientBackground}
-    >
-      <Animated.View style={[styles.formContainer, { transform: [{ scale: scaleAnim }] }]}> 
-        <Text style={styles.title}>Rate the Food</Text>
-        {/* Type Selector Chips with Icon */}
-        <Chips
-          options={foodTypes}
-          selected={type}
-          onSelect={setType}
-          styles={chipStyles}
-        />
-        {/* Inputs */}
-        <View style={{ width: '100%' }}>
-          <TextInput
-            style={styles.input}
-            placeholder="Place"
-            placeholderTextColor="#666"
-            value={place}
-            onChangeText={handlePlaceChange}
-            returnKeyType="next"
-          />
-          {showSuggestions && filteredSuggestions.length > 0 && (
-            <View style={{ backgroundColor: '#fff', borderRadius: 8, position: 'absolute', top: 48, left: 0, right: 0, zIndex: 10, maxHeight: 160 }}>
-              <FlatList
-                data={filteredSuggestions}
-                keyExtractor={item => item}
-                renderItem={({ item }) => (
-                  <TouchableOpacity onPress={() => handleSuggestionSelect(item)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
-                    <Text style={{ color: '#222', fontSize: 16 }}>{item}</Text>
-                  </TouchableOpacity>
-                )}
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={60}>
+      <LinearGradient
+        colors={["#FFA726", "#FFEB3B", "#FFD600"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientBackground}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <Animated.View style={[styles.formContainer, { transform: [{ scale: scaleAnim }] }]}> 
+            <Text style={styles.title}>Rate the Food</Text>
+            {/* Type Selector Chips with Icon */}
+            <Chips
+              options={foodTypes}
+              selected={type}
+              onSelect={setType}
+              styles={chipStyles}
+            />
+            {/* Inputs */}
+            <View style={{ width: '100%' }}>
+              <TextInput
+                style={styles.input}
+                placeholder="Place"
+                placeholderTextColor="#666"
+                value={place}
+                onChangeText={handlePlaceChange}
+                returnKeyType="next"
               />
+              {showSuggestions && filteredSuggestions.length > 0 && (
+                <View style={{ backgroundColor: '#fff', borderRadius: 8, position: 'absolute', top: 48, left: 0, right: 0, zIndex: 10, maxHeight: 160 }}>
+                  {loadingPlaces && (
+                    <Text style={{ padding: 8, color: '#666' }}>Loading...</Text>
+                  )}
+                  {/* Replaced FlatList with direct mapping (<=5 items) */}
+                  {filteredSuggestions.slice(0,5).map(item => (
+                    <TouchableOpacity key={item} onPress={() => handleSuggestionSelect(item)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
+                      <Text style={{ color: '#222', fontSize: 16 }}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
-          )}
-        </View>
-        <TextInput
-          style={styles.input}
-          placeholder="Item"
-          placeholderTextColor="#666"
-          value={item}
-          onChangeText={setItem}
-          returnKeyType="next"
-        />
-        <TextInput
-          style={styles.input}
-          placeholder="Price"
-          placeholderTextColor="#666"
-          value={price}
-          onChangeText={(t) => setPrice(sanitizePrice(t))}
-          keyboardType="decimal-pad"
-          returnKeyType="done"
-        />
-        
-      {/* Stars */}
-        <View
-          ref={starsRef}
-          style={styles.starsContainer}
-          onLayout={(e) => {
-            setContainerWidth(e.nativeEvent.layout.width);
-            setContainerX(Dimensions.get("window").width);
-          }}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderGrant={(e) => setRatingFromPageX(e.nativeEvent.pageX)}
-          onResponderMove={(e) => setRatingFromPageX(e.nativeEvent.pageX)}
-        >
-          {[...Array(10)].map((_, i) => renderStar(i))}
-        </View>
-        
-        {rating && <Text style={styles.ratingText}>Your Rating: {rating} Stars</Text>}
-        {rating && place && item && price && type && (
-          <View style={{ marginTop: 16, width: '100%' }}>
-            <Button title="Submit" onPress={handleSubmit} />
-          </View>
-        )}
-      </Animated.View>
-    </LinearGradient>
+            <TextInput
+              style={styles.input}
+              placeholder="Item"
+              placeholderTextColor="#666"
+              value={item}
+              onChangeText={setItem}
+              returnKeyType="next"
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Price"
+              placeholderTextColor="#666"
+              value={price}
+              onChangeText={(t) => setPrice(sanitizePrice(t))}
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+            />
+            
+          {/* Stars */}
+            <View
+              ref={starsRef}
+              style={styles.starsContainer}
+              onLayout={(e) => {
+                setContainerWidth(e.nativeEvent.layout.width);
+                setContainerX(Dimensions.get("window").width);
+              }}
+              onStartShouldSetResponder={() => true}
+              onMoveShouldSetResponder={() => true}
+              onResponderGrant={(e) => setRatingFromPageX(e.nativeEvent.pageX)}
+              onResponderMove={(e) => setRatingFromPageX(e.nativeEvent.pageX)}
+            >
+              {[...Array(10)].map((_, i) => renderStar(i))}
+            </View>
+            {rating && <Text style={styles.ratingText}>Your Rating: {rating} Stars</Text>}
+            {submitError && <Text style={{ color: 'red', marginTop: 4 }}>{submitError}</Text>}
+            {submitSuccess && <Text style={{ color: 'green', marginTop: 4 }}>Saved!</Text>}
+            {rating && place && item && price && type && (
+              <View style={{ marginTop: 16, width: '100%' }}>
+                <Button title={submitting ? 'Saving...' : 'Submit'} disabled={submitting} onPress={handleSubmit} />
+              </View>
+            )}
+          </Animated.View>
+        </ScrollView>
+      </LinearGradient>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   gradientBackground: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    // center handled by scrollContent so keyboard can push content
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
   },
   formContainer: {
