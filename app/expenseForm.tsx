@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Button, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, Button, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ChipOption, Chips, ChipStyles } from "./components/Chips";
 
 export default function ExpenseForm() {
@@ -106,7 +106,15 @@ export default function ExpenseForm() {
     }
     const route = expenseTypeToRoute[expenseType];
     if (route) {
-      router.replace({ pathname: route, params: { amount, month, year } });
+      const monthsArr = [
+        "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
+      ];
+      const monthIndex = monthsArr.indexOf(month);
+      const currentDay = new Date().getDate();
+      const day = Math.min(currentDay, 25); // cap at 25
+      const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      // Removed month and year from params; only passing amount and computed date
+      router.replace({ pathname: route, params: { amount, date: dateStr } });
     } else {
       alert("Unknown expense type selected.");
     }
@@ -118,62 +126,69 @@ export default function ExpenseForm() {
   const monthOptions: ChipOption[] = months.map(m => ({ label: m }));
 
   return (
-    <LinearGradient
-      colors={["#8e24aa", "#43ea7f", "#00c853"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.gradientBackground}
-    >
-      <Animated.View style={[styles.formContainer, { transform: [{ scale: scaleAnim }] }]}>
-        <Text style={styles.title}>Submit an Expense</Text>
-        {/* Expense Type Chips */}
-        <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' }}>Select Expense Type</Text>
-        <Chips
-          options={expenseTypes}
-          selected={expenseType}
-          onSelect={setExpenseType}
-          styles={chipStyles}
-        />
-        <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' }}>Select Month</Text>
-        <Chips
-          options={monthOptions}
-          selected={month}
-          onSelect={setMonth}
-        />
-        <View style={{ width: '100%', marginBottom: 16 }}>
-          <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4 }}>Enter Amount</Text>
-          <Text style={{ position: 'absolute', left: 12, top: 34, fontSize: 18, color: '#222' }}>₹</Text>
-          <TextInput
-            style={[styles.input, { paddingLeft: 28 }]}
-            placeholder="Amount"
-            keyboardType="numeric"
-            value={amount}
-            onChangeText={handleAmountChange}
-          />
-        </View>
-        <View style={{ width: '100%', marginBottom: 16 }}>
-          <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4 }}>Enter Year</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Year"
-            keyboardType="numeric"
-            value={year}
-            onChangeText={handleYearChange}
-          />
-          {yearError ? <Text style={{ color: 'red', marginBottom: 8 }}>{yearError}</Text> : null}
-        </View>
-        {amountError ? <Text style={{ color: 'red', marginBottom: 8 }}>{amountError}</Text> : null}
-        <Button title="Next" onPress={handleNext} disabled={!!amountError || !amount || !expenseType || !month || !year || !!yearError} />
-      </Animated.View>
-    </LinearGradient>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={60}>
+      <LinearGradient
+        colors={["#8e24aa", "#43ea7f", "#00c853"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.gradientBackground}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <Animated.View style={[styles.formContainer, { transform: [{ scale: scaleAnim }] }]}>
+            <Text style={styles.title}>Submit an Expense</Text>
+            {/* Expense Type Chips */}
+            <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' }}>Select Expense Type</Text>
+            <Chips
+              options={expenseTypes}
+              selected={expenseType}
+              onSelect={setExpenseType}
+              styles={chipStyles}
+            />
+            <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' }}>Select Month</Text>
+            <Chips
+              options={monthOptions}
+              selected={month}
+              onSelect={setMonth}
+            />
+            <View style={{ width: '100%', marginBottom: 16 }}>
+              <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4 }}>Enter Amount</Text>
+              <Text style={{ position: 'absolute', left: 12, top: 34, fontSize: 18, color: '#222' }}>₹</Text>
+              <TextInput
+                style={[styles.input, { paddingLeft: 28 }]}
+                placeholder="Amount"
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={handleAmountChange}
+              />
+            </View>
+            <View style={{ width: '100%', marginBottom: 16 }}>
+              <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4 }}>Enter Year</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Year"
+                keyboardType="numeric"
+                value={year}
+                onChangeText={handleYearChange}
+              />
+              {yearError ? <Text style={{ color: 'red', marginBottom: 8 }}>{yearError}</Text> : null}
+            </View>
+            {amountError ? <Text style={{ color: 'red', marginBottom: 8 }}>{amountError}</Text> : null}
+            <Button title="Next" onPress={handleNext} disabled={!!amountError || !amount || !expenseType || !month || !year || !!yearError} />
+          </Animated.View>
+        </ScrollView>
+      </LinearGradient>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   gradientBackground: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+  },
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
   },
   formContainer: {
