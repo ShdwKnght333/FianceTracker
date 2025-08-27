@@ -2,6 +2,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { addUtilitiesExpense } from "../../lib/expenseRatingService";
 import { ChipOption, Chips } from "../components/Chips";
 
 const utilityTypes: ChipOption[] = [
@@ -20,47 +21,57 @@ const frequencyTypes: ChipOption[] = [
   { label: "Other", icon: "❓" },
 ];
 
-const popularDescriptions = [
-  "Stationery",
-  "Gift",
-  "Charity",
-  "Tips",
-  "Snacks",
-  "Parking",
-  "Miscellaneous",
-  "Donation",
-  "Subscription",
-  "Repair",
-];
+const utilityLabelMap: Record<string, 'Electricity' | 'Maintenance' | 'Internet' | 'Cleaning' | 'Rent' | 'Laundry' | 'Other'> = {
+  'Rent': 'Rent',
+  'Electricity': 'Electricity',
+  'Cleaning': 'Cleaning',
+  'Internet': 'Internet',
+  'Maintenance': 'Maintenance',
+  'Laundry': 'Laundry',
+  'Other': 'Other',
+};
+
+const frequencyLabelMap: Record<string, 'Monthly' | 'Yearly' | 'Other'> = {
+  'Monthly': 'Monthly',
+  'Yearly': 'Yearly',
+  'Other': 'Other',
+};
 
 export default function UtilitiesExpense() {
   const [description, setDescription] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const [utilityType, setUtilityType] = useState("");
   const [frequency, setFrequency] = useState("Monthly");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
   const router = useRouter();
   const params = useLocalSearchParams();
-  const amount = params.amount;
+  const amount = params.amount as string | undefined;
+  const date = params.date as string | undefined;
 
-  const filteredSuggestions = description
-    ? popularDescriptions.filter(opt => opt.toLowerCase().includes(description.toLowerCase()))
-    : popularDescriptions;
-
-  function handleDescriptionChange(text: string) {
-    setDescription(text);
-    setShowSuggestions(true);
-  }
-
-  function handleSuggestionSelect(suggestion: string) {
-    setDescription(suggestion);
-    setShowSuggestions(false);
-  }
-
-  function handleSubmit() {
-    Alert.alert(
-      "Expense Submitted",
-      `Utility: ${utilityType}\nFrequency: ${frequency}\nAmount: ₹${amount}${description ? `\nDescription: ${description}` : ""}`
-    );
+  async function handleSubmit() {
+    setSubmitError(null);
+    if (!utilityType || !amount || !date) {
+      Alert.alert('Missing Data', 'Utility type, amount and date are required');
+      return;
+    }
+    setSubmitting(true);
+    const payload = {
+      Date: date,
+      Type: 'Utilities' as const,
+      Amount: Number(amount),
+      Description: null,
+      Utility: utilityLabelMap[utilityType],
+      Frequency: frequencyLabelMap[frequency],
+      Utility_description: description || '',
+    };
+    const { error } = await addUtilitiesExpense(payload);
+    setSubmitting(false);
+    if (error) {
+      setSubmitError(error.message || 'Failed to save');
+      Alert.alert('Error', submitError || 'Failed to save');
+      return;
+    }
+    Alert.alert('Saved', 'Utilities expense saved');
     router.back();
   }
 
@@ -91,26 +102,16 @@ export default function UtilitiesExpense() {
                 style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, width: '100%' }}
                 placeholder="Enter description (optional)..."
                 value={description}
-                onChangeText={handleDescriptionChange}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                onChangeText={setDescription}
               />
-              {showSuggestions && filteredSuggestions.length > 0 && (
-                <View style={{ backgroundColor: '#fff', borderRadius: 8, position: 'absolute', top: 48, left: 0, right: 0, zIndex: 10, maxHeight: 160 }}>
-                  {filteredSuggestions.slice(0,5).map(item => (
-                    <TouchableOpacity key={item} onPress={() => handleSuggestionSelect(item)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
-                      <Text style={{ color: '#222', fontSize: 16 }}>{item}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
             </View>
+            {submitError && <Text style={{ color: 'red', marginBottom: 8 }}>{submitError}</Text>}
             <TouchableOpacity
-              style={{ backgroundColor: utilityType ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center' }}
-              disabled={!utilityType}
+              style={{ backgroundColor: utilityType && !submitting ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center' }}
+              disabled={!utilityType || submitting}
               onPress={handleSubmit}
             >
-              <Text style={{ color: utilityType ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>Submit</Text>
+              <Text style={{ color: utilityType && !submitting ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>{submitting ? 'Saving...' : 'Submit'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

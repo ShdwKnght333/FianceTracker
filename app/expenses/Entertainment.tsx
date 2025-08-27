@@ -1,7 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { addEntertainmentExpense, getPopularEntertainmentDescriptions } from "../../lib/expenseRatingService";
 import { ChipOption, Chips } from "../components/Chips";
 
 const entertainmentTypes: ChipOption[] = [
@@ -14,30 +15,44 @@ const entertainmentTypes: ChipOption[] = [
   { label: "Other", icon: "❓" },
 ];
 
-const popularDescriptions = [
-  "Stationery",
-  "Gift",
-  "Charity",
-  "Tips",
-  "Snacks",
-  "Parking",
-  "Miscellaneous",
-  "Donation",
-  "Subscription",
-  "Repair",
-];
+const entertainmentLabelMap: Record<string, 'Movie' | 'Event' | 'Games' | 'Subscription' | 'Matches' | 'Sports' | 'Other'> = {
+  'Movie': 'Movie',
+  'Games': 'Games',
+  'Sports': 'Sports',
+  'Matches': 'Matches',
+  'Events': 'Event',
+  'Subscriptions': 'Subscription',
+  'Other': 'Other',
+};
 
 export default function EntertainmentExpense() {
   const [description, setDescription] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [entertainmentType, setEntertainmentType] = useState("");
+  const [popularDescriptions, setPopularDescriptions] = useState<string[]>([]);
+  const [loadingDescriptions, setLoadingDescriptions] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const params = useLocalSearchParams();
-  const amount = params.amount;
+  const amount = params.amount as string | undefined;
+  const date = params.date as string | undefined;
 
-  const filteredSuggestions = description
-    ? popularDescriptions.filter(opt => opt.toLowerCase().includes(description.toLowerCase()))
-    : popularDescriptions;
+  const filteredSuggestions = popularDescriptions;
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoadingDescriptions(true);
+      const { data } = await getPopularEntertainmentDescriptions(description || undefined, 5);
+      if (data) setPopularDescriptions(data.map(d => d.place));
+      setLoadingDescriptions(false);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [description]);
 
   function handleDescriptionChange(text: string) {
     setDescription(text);
@@ -49,11 +64,29 @@ export default function EntertainmentExpense() {
     setShowSuggestions(false);
   }
 
-  function handleSubmit() {
-    Alert.alert(
-      "Expense Submitted",
-      `Entertainment Type: ${entertainmentType}\nDescription: ${description}\nAmount: ₹${amount}`
-    );
+  async function handleSubmit() {
+    setSubmitError(null);
+    if (!entertainmentType || !description || !amount || !date) {
+      Alert.alert('Missing Data', 'Type, description, amount and date are required');
+      return;
+    }
+    setSubmitting(true);
+    const payload = {
+      Date: date,
+      Type: 'Entertainment' as const,
+      Amount: Number(amount),
+      Description: null,
+      Entertainment: entertainmentLabelMap[entertainmentType],
+      Entertainment_description: description || '',
+    };
+    const { error } = await addEntertainmentExpense(payload);
+    setSubmitting(false);
+    if (error) {
+      setSubmitError(error.message || 'Failed to save');
+      Alert.alert('Error', submitError || 'Failed to save');
+      return;
+    }
+    Alert.alert('Saved', 'Entertainment expense saved');
     router.back();
   }
 
@@ -84,6 +117,9 @@ export default function EntertainmentExpense() {
               />
               {showSuggestions && filteredSuggestions.length > 0 && (
                 <View style={{ backgroundColor: '#fff', borderRadius: 8, position: 'absolute', top: 48, left: 0, right: 0, zIndex: 10, maxHeight: 160 }}>
+                  {loadingDescriptions && (
+                    <Text style={{ padding: 8, color: '#666' }}>Loading...</Text>
+                  )}
                   {filteredSuggestions.slice(0,5).map(item => (
                     <TouchableOpacity key={item} onPress={() => handleSuggestionSelect(item)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
                       <Text style={{ color: '#222', fontSize: 16 }}>{item}</Text>
@@ -92,12 +128,13 @@ export default function EntertainmentExpense() {
                 </View>
               )}
             </View>
+            {submitError && <Text style={{ color: 'red', marginBottom: 8 }}>{submitError}</Text>}
             <TouchableOpacity
-              style={{ backgroundColor: description && entertainmentType ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center' }}
-              disabled={!description || !entertainmentType}
+              style={{ backgroundColor: description && entertainmentType && !submitting ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center' }}
+              disabled={!description || !entertainmentType || submitting}
               onPress={handleSubmit}
             >
-              <Text style={{ color: description && entertainmentType ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>Submit</Text>
+              <Text style={{ color: description && entertainmentType && !submitting ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>{submitting ? 'Saving...' : 'Submit'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
