@@ -1,8 +1,9 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 
+import { addDrinksExpense, getPopularDrinkPlaces } from "../../lib/expenseRatingService";
 import { ChipOption, Chips } from "../components/Chips";
 
 const drinkTypes: ChipOption[] = [
@@ -12,30 +13,34 @@ const drinkTypes: ChipOption[] = [
   { label: "Other", icon: "🍶" },
 ];
 
-const popularDescriptions = [
-  "Stationery",
-  "Gift",
-  "Charity",
-  "Tips",
-  "Snacks",
-  "Parking",
-  "Miscellaneous",
-  "Donation",
-  "Subscription",
-  "Repair",
-];
-
 export default function DrinksExpense() {
   const [place, setPlace] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [drinkType, setDrinkType] = useState("");
+  const [popularPlaces, setPopularPlaces] = useState<string[]>([]);
+  const [loadingPlaces, setLoadingPlaces] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const params = useLocalSearchParams();
-  const amount = params.amount;
+  const amount = params.amount as string | undefined;
+  const date = params.date as string | undefined;
 
-  const filteredSuggestions = place
-    ? popularDescriptions.filter(opt => opt.toLowerCase().includes(place.toLowerCase()))
-    : popularDescriptions;
+  const filteredSuggestions = popularPlaces;
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(async () => {
+      setLoadingPlaces(true);
+      const { data } = await getPopularDrinkPlaces(place || undefined, 5);
+      if (data) setPopularPlaces(data.map(d => d.place));
+      setLoadingPlaces(false);
+    }, 300);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [place]);
 
   function handlePlaceChange(text: string) {
     setPlace(text);
@@ -47,11 +52,29 @@ export default function DrinksExpense() {
     setShowSuggestions(false);
   }
 
-  function handleSubmit() {
-    Alert.alert(
-      "Expense Submitted",
-      `Drink: ${drinkType}\nPlace: ${place}\nAmount: ₹${amount}`
-    );
+  async function handleSubmit() {
+    setSubmitError(null);
+    if (!drinkType || !place || !amount || !date) {
+      Alert.alert('Missing Data', 'Drink type, place, amount and date are required');
+      return;
+    }
+    setSubmitting(true);
+    const payload = {
+      Date: date,
+      Type: 'Drinks' as const,
+      Amount: Number(amount),
+      Description: null,
+      Drink: drinkType as any,
+      Drink_place: place,
+    };
+    const { error } = await addDrinksExpense(payload);
+    setSubmitting(false);
+    if (error) {
+      setSubmitError(error.message || 'Failed to save');
+      Alert.alert('Error', submitError || 'Failed to save');
+      return;
+    }
+    Alert.alert('Saved', 'Drinks expense saved');
     router.back();
   }
 
@@ -82,6 +105,9 @@ export default function DrinksExpense() {
               />
               {showSuggestions && filteredSuggestions.length > 0 && (
                 <View style={{ backgroundColor: '#fff', borderRadius: 8, position: 'absolute', top: 48, left: 0, right: 0, zIndex: 10, maxHeight: 160 }}>
+                  {loadingPlaces && (
+                    <Text style={{ padding: 8, color: '#666' }}>Loading...</Text>
+                  )}
                   {filteredSuggestions.slice(0,5).map(item => (
                     <TouchableOpacity key={item} onPress={() => handleSuggestionSelect(item)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
                       <Text style={{ color: '#222', fontSize: 16 }}>{item}</Text>
@@ -90,12 +116,13 @@ export default function DrinksExpense() {
                 </View>
               )}
             </View>
+            {submitError && <Text style={{ color: 'red', marginBottom: 8 }}>{submitError}</Text>}
             <TouchableOpacity
-              style={{ backgroundColor: place && drinkType ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center' }}
-              disabled={!place || !drinkType}
+              style={{ backgroundColor: place && drinkType && !submitting ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center' }}
+              disabled={!place || !drinkType || submitting}
               onPress={handleSubmit}
             >
-              <Text style={{ color: place && drinkType ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>Submit</Text>
+              <Text style={{ color: place && drinkType && !submitting ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>{submitting ? 'Saving...' : 'Submit'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

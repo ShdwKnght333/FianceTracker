@@ -1,45 +1,49 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
-
-const popularDescriptions = [
-  "Stationery",
-  "Gift",
-  "Charity",
-  "Tips",
-  "Snacks",
-  "Parking",
-  "Miscellaneous",
-  "Donation",
-  "Subscription",
-  "Repair",
-];
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { addDefaultExpense, ExpenseRow } from "../../lib/expenseRatingService";
 
 export default function PersonalExpense() {
   const [description, setDescription] = useState("");
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
   const params = useLocalSearchParams();
-  const amount = params.amount;
+  const amount = params.amount as string | undefined;
+  const date = params.date as string | undefined;
 
-  const filteredSuggestions = description
-    ? popularDescriptions.filter(opt => opt.toLowerCase().includes(description.toLowerCase()))
-    : popularDescriptions;
-
-  function handleDescriptionChange(text: string) {
-    setDescription(text);
-    setShowSuggestions(true);
-  }
-
-  function handleSuggestionSelect(suggestion: string) {
-    setDescription(suggestion);
-    setShowSuggestions(false);
-  }
-
-  function handleSubmit() {
-    Alert.alert("Expense Submitted", `Description: ${description}\nAmount: ₹${amount}`);
-    router.back();
+  async function handleSubmit() {
+    if (!description || !amount || !date) {
+      Alert.alert('Missing Data', 'Description, amount and date are required');
+      return;
+    }
+    const numericAmount = Number(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      Alert.alert('Invalid Amount', 'Amount must be a positive number');
+      return;
+    }
+    try {
+      setSubmitting(true);
+      const expense: ExpenseRow = {
+        Date: date,
+        Type: 'Personal',
+        Amount: numericAmount,
+        Description: description.trim() || null,
+      };
+      const { error } = await addDefaultExpense(expense);
+      if (error) {
+        console.error(error);
+        Alert.alert('Submission Failed', 'Could not save expense.');
+        return;
+      }
+      Alert.alert('Expense Submitted', `Description: ${description}\nAmount: ₹${numericAmount}`);
+      router.back();
+    } catch (e) {
+      console.error(e);
+      Alert.alert('Error', 'Unexpected error occurred.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -58,26 +62,17 @@ export default function PersonalExpense() {
                 style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, width: '100%' }}
                 placeholder="Enter description..."
                 value={description}
-                onChangeText={handleDescriptionChange}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                onChangeText={setDescription}
+                editable={!submitting}
               />
-              {showSuggestions && filteredSuggestions.length > 0 && (
-                <View style={{ backgroundColor: '#fff', borderRadius: 8, position: 'absolute', top: 48, left: 0, right: 0, zIndex: 10, maxHeight: 160 }}>
-                  {filteredSuggestions.slice(0,5).map(item => (
-                    <TouchableOpacity key={item} onPress={() => handleSuggestionSelect(item)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
-                      <Text style={{ color: '#222', fontSize: 16 }}>{item}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
             </View>
             <TouchableOpacity
-              style={{ backgroundColor: description ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center' }}
-              disabled={!description}
+              style={{ backgroundColor: description && amount && date && !submitting ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 8 }}
+              disabled={!description || !amount || !date || submitting}
               onPress={handleSubmit}
             >
-              <Text style={{ color: description ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>Submit</Text>
+              {submitting && <ActivityIndicator color="#fff" style={{ marginRight: 8 }} />}
+              <Text style={{ color: description && amount && date && !submitting ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>{submitting ? 'Submitting...' : 'Submit'}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
