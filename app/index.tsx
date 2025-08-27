@@ -5,21 +5,19 @@ import { Animated, StyleSheet, Text, TouchableWithoutFeedback, View } from "reac
 
 export default function Random() {
   const router = useRouter();
-  const [expandingTile, setExpandingTile] = useState<null | "expense" | "food">(null);
+  const [expandingTile, setExpandingTile] = useState<null | "expense" | "food" | "dish">(null);
   const flipAnim1 = useRef(new Animated.Value(0)).current;
   const flipAnim2 = useRef(new Animated.Value(0)).current;
+  const flipAnim3 = useRef(new Animated.Value(0)).current; // new animation for dish viewer
 
-  const expandTile = (animation: Animated.Value, navigateTo: "/expenseForm" | "/foodRating", tile: "expense" | "food") => {
+  const expandTile = (animation: Animated.Value, navigateTo: "/expenseForm" | "/foodRating" | "/dishViewer", tile: "expense" | "food" | "dish") => {
     setExpandingTile(tile);
     Animated.timing(animation, {
       toValue: 1,
       duration: 800,
       useNativeDriver: true,
     }).start(() => {
-      // Navigate immediately when tile has fully expanded
-      router.push(navigateTo);
-      
-      // Reset animation after navigation
+      router.push(navigateTo as any);
       setTimeout(() => {
         animation.setValue(0);
         setExpandingTile(null);
@@ -91,6 +89,25 @@ export default function Random() {
               style={styles.gradientTile}
             >
               <Animated.Text style={[styles.tileText, { opacity: textOpacity(flipAnim2) }]}>Submit a Food Rating</Animated.Text>
+            </LinearGradient>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      )}
+      {(expandingTile === null || expandingTile === "dish") && (
+        <View style={{ height: 20 }} />
+      )}
+      {(expandingTile === null || expandingTile === "dish") && (
+        <TouchableWithoutFeedback
+          onPress={() => expandTile(flipAnim3, "/dishViewer", "dish")}
+        >
+          <Animated.View style={[styles.tile, tileStyle(flipAnim3)]}>
+            <LinearGradient
+              colors={["#2196F3", "#21CBF3", "#64B5F6"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gradientTile}
+            >
+              <Animated.Text style={[styles.tileText, { opacity: textOpacity(flipAnim3) }]}>View a Dish</Animated.Text>
             </LinearGradient>
           </Animated.View>
         </TouchableWithoutFeedback>

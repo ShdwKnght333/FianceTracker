@@ -3,7 +3,8 @@ import { useFocusEffect, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Button, Dimensions, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { addFoodRating, getPopularPlaces } from '../lib/foodRatingService';
-import { ChipOption, Chips, ChipStyles } from "./components/Chips";
+import { Chips, ChipStyles } from "./components/Chips";
+import { foodTypes } from './constants/foodTypes';
 
 // Dynamic place suggestions loaded from Supabase (FoodRating table)
 // Fallback to empty list if fetch fails. Fetched again when user types (debounced)
@@ -30,32 +31,6 @@ export default function FoodRating() {
   const [popularPlaces, setPopularPlaces] = useState<string[]>([]);
   const [loadingPlaces, setLoadingPlaces] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const foodTypes: ChipOption[] = [
-    { label: 'Dose', icon: '🥞' },
-    { label: 'Idli', icon: '🍛' },
-    { label: 'Breakfast', icon: '🥥' },
-    { label: 'Traditional Meals', icon: '🥬' },
-    { label: 'Street Food', icon: '🌭' },
-    { label: 'Roti Meals', icon: '🫓' },
-    { label: 'Curries', icon: '🥘' },
-    { label: 'Appetizers', icon: '🍢' },
-    { label: 'Rolls', icon: '🌯' },
-    { label: 'Rice', icon: '🍚' },
-    { label: 'Breads', icon: '🥯' },
-    { label: 'Chinese', icon: '🥡' },
-    { label: 'Mexican', icon: '🌮' },
-    { label: 'Pizza', icon: '🍕' },
-    { label: 'Burgers', icon: '🍔' },
-    { label: 'Pasta', icon: '🍝' },
-    { label: 'Sandwiches', icon: '🥪' },
-    { label: 'Western Desserts', icon: '🍰' },
-    { label: 'Indian Desserts', icon: '🍮' },
-    { label: 'Ice Cream', icon: '🍦' },
-    { label: 'Coffee', icon: '☕' },
-    { label: 'Juice', icon: '🥤' },
-    { label: 'Buffet', icon: '🍱' },
-    { label: 'Other', icon: '🍴' },
-  ];
   const chipStyles: ChipStyles = {
     chipsRow: styles.chipsRow,
     chip: styles.chip,
