@@ -1,0 +1,58 @@
+export interface FoodType { label: string; icon: string; }
+
+// Shared food type chips list
+export const foodTypes: FoodType[] = [
+  { label: 'Dose', icon: '🥞' },
+  { label: 'Idli', icon: '🍛' },
+  { label: 'Breakfast', icon: '🥥' },
+  { label: 'Traditional Meals', icon: '🥬' },
+  { label: 'Street Food', icon: '🌭' },
+  { label: 'Roti Meals', icon: '🫓' },
+  { label: 'Curries', icon: '🥘' },
+  { label: 'Appetizers', icon: '🍢' },
+  { label: 'Rolls', icon: '🌯' },
+  { label: 'Rice', icon: '🍚' },
+  { label: 'Breads', icon: '🥯' },
+  { label: 'Chinese', icon: '🥡' },
+  { label: 'Mexican', icon: '🌮' },
+  { label: 'Pizza', icon: '🍕' },
+  { label: 'Burgers', icon: '🍔' },
+  { label: 'Pasta', icon: '🍝' },
+  { label: 'Sandwiches', icon: '🥪' },
+  { label: 'Western Desserts', icon: '🍰' },
+  { label: 'Indian Desserts', icon: '🍮' },
+  { label: 'Ice Cream', icon: '🍦' },
+  { label: 'Coffee', icon: '☕' },
+  { label: 'Juice', icon: '🥤' },
+  { label: 'Buffet', icon: '🍱' },
+  { label: 'Other', icon: '🍴' },
+];
+
+// Map each food type label to a default illustrative image.
+// Ensure the asset names exist under assets/images.
+export const foodTypeImageMap: Record<string, any> = {
+  'Dose': require('../../assets/images/dose.png'),
+  'Idli': require('../../assets/images/idli.png'),
+  'Breakfast': require('../../assets/images/breakfast.png'),
+  'Traditional Meals': require('../../assets/images/meals.png'),
+  'Street Food': require('../../assets/images/chaats.png'),
+  'Roti Meals': require('../../assets/images/roti.png'),
+  'Curries': require('../../assets/images/curry.png'),
+  'Appetizers': require('../../assets/images/starters.png'),
+  'Rolls': require('../../assets/images/rolls.png'),
+  'Rice': require('../../assets/images/rice.png'),
+  'Breads': require('../../assets/images/bread.png'),
+  'Chinese': require('../../assets/images/chineese.png'),
+  'Mexican': require('../../assets/images/mexican.png'),
+  'Pizza': require('../../assets/images/pizza.png'),
+  'Burgers': require('../../assets/images/burgwe.png'),
+  'Pasta': require('../../assets/images/pasta.png'),
+  'Sandwiches': require('../../assets/images/sandwich.png'),
+  'Western Desserts': require('../../assets/images/westerndessert.png'),
+  'Indian Desserts': require('../../assets/images/desserts.png'),
+  'Ice Cream': require('../../assets/images/icecream.png'),
+  'Coffee': require('../../assets/images/coffee.png'),
+  'Juice': require('../../assets/images/juice.png'),
+  'Buffet': require('../../assets/images/buffet.png'),
+  'Other': require('../../assets/images/other.png'),
+};
