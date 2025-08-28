@@ -71,7 +71,7 @@ export default function DishViewer() {
           <DishSearchBar loading={loading} onView={handleView} />
 
           {/* Middle Content */}
-          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 24 }}>
+          <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', marginVertical: 12 }}>
             {loading && <ActivityIndicator size='large' color='#fff' />}
             {!loading && dishData && (
               <DishDetails dishData={dishData} setDishData={setDishData} loading={loading} />
@@ -82,7 +82,7 @@ export default function DishViewer() {
           </View>
 
           {/* Bottom Back Button */}
-          <View style={{ paddingBottom: 28 }}>
+          <View style={{ paddingBottom: 20 }}>
             <TouchableOpacity onPress={() => router.back()} style={{ alignSelf: 'center', paddingVertical: 8, paddingHorizontal: 16 }}>
               <Text style={{ color: '#fff', textDecorationLine: 'underline', fontSize: 16 }}>Back</Text>
             </TouchableOpacity>
