@@ -12,7 +12,7 @@ export default function DishDescription({ dishData, setDishData }: DishDescripti
   const [editing, setEditing] = useState(false);
   const [tempDesc, setTempDesc] = useState('');
   const [inputHeight, setInputHeight] = useState(150);
-  const MAX_EDITOR_WIDTH = Dimensions.get('window').width * 0.9;
+  const MAX_EDITOR_WIDTH = Dimensions.get('window').width * 0.85;
 
   // Reset when dish changes
   useEffect(() => {
@@ -58,7 +58,7 @@ export default function DishDescription({ dishData, setDishData }: DishDescripti
   if (!editing) {
     return (
       <>
-        <Text style={{ color: '#fff', fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: 16 }}>{dishData.description}</Text>
+        <Text style={{ color: '#fff', fontSize: 15, lineHeight: 22, textAlign: 'center', marginBottom: 16 }}>{dishData.description.length > 0 ? dishData.description : 'No description available.'}</Text>
         <TouchableOpacity onPress={handleEdit} style={{ backgroundColor: '#1565C0', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, marginBottom: 32 }}>
           <Text style={{ color: '#fff', fontWeight: '600' }}>Edit Description</Text>
         </TouchableOpacity>
@@ -69,7 +69,7 @@ export default function DishDescription({ dishData, setDishData }: DishDescripti
   return (
     <View style={{ width: '100%', marginBottom: 32 }}>
       <TextInput
-        style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, width: '90%', maxWidth: MAX_EDITOR_WIDTH, alignSelf: 'center', height: inputHeight, textAlignVertical: 'top' }}
+        style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, width: '85%', maxWidth: MAX_EDITOR_WIDTH, alignSelf: 'center', height: inputHeight, textAlignVertical: 'top' }}
         multiline
         value={tempDesc}
         onChangeText={setTempDesc}

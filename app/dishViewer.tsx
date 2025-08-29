@@ -32,7 +32,7 @@ export default function DishViewer() {
             restaurant: data.Place || 'Unknown Place',
             rating: typeof data.Rating === 'number' ? data.Rating : 0,
             price: typeof data.Price === 'number' ? data.Price : null,
-            description: data.description ?? 'No description yet.',
+            description: data.description ?? '',
             type: data.Type || 'Other',
             image: data.image
           });
