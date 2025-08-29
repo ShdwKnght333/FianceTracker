@@ -5,12 +5,13 @@ import { Animated, StyleSheet, Text, TouchableWithoutFeedback, View } from "reac
 
 export default function Random() {
   const router = useRouter();
-  const [expandingTile, setExpandingTile] = useState<null | "expense" | "food" | "dish">(null);
+  const [expandingTile, setExpandingTile] = useState<null | "expense" | "food" | "dish" | "charts">(null);
   const flipAnim1 = useRef(new Animated.Value(0)).current;
   const flipAnim2 = useRef(new Animated.Value(0)).current;
   const flipAnim3 = useRef(new Animated.Value(0)).current; // new animation for dish viewer
+  const flipAnim4 = useRef(new Animated.Value(0)).current; // charts
 
-  const expandTile = (animation: Animated.Value, navigateTo: "/expenseForm" | "/foodRating" | "/dishViewer", tile: "expense" | "food" | "dish") => {
+  const expandTile = (animation: Animated.Value, navigateTo: "/expenseForm" | "/foodRating" | "/dishViewer" | "/charts", tile: "expense" | "food" | "dish" | "charts") => {
     setExpandingTile(tile);
     Animated.timing(animation, {
       toValue: 1,
@@ -108,6 +109,25 @@ export default function Random() {
               style={styles.gradientTile}
             >
               <Animated.Text style={[styles.tileText, { opacity: textOpacity(flipAnim3) }]}>View a Dish</Animated.Text>
+            </LinearGradient>
+          </Animated.View>
+        </TouchableWithoutFeedback>
+      )}
+      {(expandingTile === null || expandingTile === "charts") && (
+        <View style={{ height: 20 }} />
+      )}
+      {(expandingTile === null || expandingTile === "charts") && (
+        <TouchableWithoutFeedback
+          onPress={() => expandTile(flipAnim4, "/charts", "charts")}
+        >
+          <Animated.View style={[styles.tile, tileStyle(flipAnim4)]}>
+            <LinearGradient
+              colors={["#0f2027", "#203a43", "#2c5364"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.gradientTile}
+            >
+              <Animated.Text style={[styles.tileText, { opacity: textOpacity(flipAnim4) }]}>View Charts</Animated.Text>
             </LinearGradient>
           </Animated.View>
         </TouchableWithoutFeedback>
