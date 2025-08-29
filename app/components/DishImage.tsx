@@ -73,7 +73,6 @@ export default function DishImage({ dishData, setDishData }: DishImageProps) {
     }
 
     setEditingImage(false);
-    setTempImageUri(null);
   }
 
   function handleCancelImage() {
@@ -84,7 +83,7 @@ export default function DishImage({ dishData, setDishData }: DishImageProps) {
   return (
     <>
       <Image
-        source={editingImage && tempImageUri ? { uri: tempImageUri } : (dishData.image ? { uri: imageUri } : foodTypeImageMap[dishData.type] || foodTypeImageMap['Other'])}
+        source={tempImageUri ? { uri: tempImageUri } : (dishData.image ? { uri: imageUri } : foodTypeImageMap[dishData.type] || foodTypeImageMap['Other'])}
         style={{ width: 320, height: 320, borderRadius: 16, marginBottom: 12, backgroundColor: '#ffffff33', opacity: dishData.image ? 1 : 0.7 }}
         resizeMode='cover'
       />

@@ -31,27 +31,10 @@ function DishRatingComponent({ rating, size = 24, style }: DishRatingProps) {
   }, [rating]);
 
   return (
-    <View style={[{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }, isPerfect && { shadowColor: '#9C27B0', shadowOpacity: 0.95, shadowRadius: 14, shadowOffset: { width: 0, height: 0 }, elevation: 12 }, style]}>      
-      {emojis.map(({ i, opacity }) => (
-        <Text
-          key={i}
-          style={{
-            fontSize: size,
-            marginHorizontal: 2,
-            opacity,
-            ...(isPerfect && {
-              textShadowColor: '#E1BEE7',
-              textShadowOffset: { width: 0, height: 0 },
-              textShadowRadius: 10,
-            }),
-          }}
-        >
-          🍽️
-        </Text>
-      ))}
+    <View>
       <Text
         style={{
-          marginLeft: 8,
+          alignSelf: 'center',
           fontSize: 14,
           fontWeight: '600',
           color: ratingColor,
@@ -64,6 +47,25 @@ function DishRatingComponent({ rating, size = 24, style }: DishRatingProps) {
       >
         {rating.toFixed(1)}/10.0
       </Text>
+      <View style={[{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }, isPerfect && { shadowColor: '#9C27B0', shadowOpacity: 0.95, shadowRadius: 14, shadowOffset: { width: 0, height: 0 }, elevation: 12 }, style]}>
+        {emojis.map(({ i, opacity }) => (
+          <Text
+            key={i}
+            style={{
+              fontSize: size,
+              marginHorizontal: 2,
+              opacity,
+              ...(isPerfect && {
+                textShadowColor: '#E1BEE7',
+                textShadowOffset: { width: 0, height: 0 },
+                textShadowRadius: 10,
+              }),
+            }}
+          >
+            🍽️
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }
