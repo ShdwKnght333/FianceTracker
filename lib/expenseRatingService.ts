@@ -222,3 +222,29 @@ export async function getPopularInvestmentMediums(prefix?: string, limit = 5): P
 export async function addDefaultExpense(data: ExpenseRow) {
   return supabase.from('expenses').insert(data).select().single();
 }
+
+//MARK: - Charts and Aggregations
+export interface ExpenseAggregation {
+  Type: string; // "Groceries", "Entertainment" etc
+  Date: string; // "2023-10-05"
+  Amount: number;
+}
+
+export async function getExpensesAggregation(startDate: string, endDate: string, types: string[]): Promise<{ data: ExpenseAggregation[] | null; error: any }> {
+  let aggregationQuery = supabase
+    .from('expenses')
+    .select('Type, Date, Amount')
+    .gte('Date', startDate)
+    .lte('Date', endDate);
+
+  if (types.length > 0) {
+    aggregationQuery = aggregationQuery.in('Type', types);
+  }
+
+  const { data, error } = await aggregationQuery;
+
+  if (error) {
+    return { data: null, error };
+  }
+  return { data: data as ExpenseAggregation[], error: null };
+}
