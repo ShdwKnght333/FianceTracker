@@ -224,27 +224,69 @@ export async function addDefaultExpense(data: ExpenseRow) {
 }
 
 //MARK: - Charts and Aggregations
-export interface ExpenseAggregation {
-  Type: string; // "Groceries", "Entertainment" etc
-  Date: string; // "2023-10-05"
-  Amount: number;
+// Unified / super interface containing every possible field from all expense subtype rows.
+// Each optional because only relevant for its corresponding Type.
+export interface ExpenseFullRow extends ExpenseRow {
+  // Food
+  Meal?: ExpenseFoodRow['Meal'];
+  Meal_place?: string;
+  // Drinks
+  Drink?: ExpenseDrinksRow['Drink'];
+  Drink_place?: string;
+  // Groceries
+  Grocery?: ExpenseGroceriesRow['Grocery'];
+  Grocery_description?: string;
+  // Travel
+  Travel?: ExpenseTravelRow['Travel'];
+  Journey?: string;
+  Journey_details?: string;
+  // Shopping
+  Shopping?: ExpenseShoppingRow['Shopping'];
+  Need?: ExpenseShoppingRow['Need'];
+  Item?: string;
+  // Utilities
+  Utility?: ExpenseUtilitiesRow['Utility'];
+  Frequency?: ExpenseUtilitiesRow['Frequency'];
+  Utility_description?: string;
+  // Entertainment
+  Entertainment?: ExpenseEntertainmentRow['Entertainment'];
+  Entertainment_description?: string;
+  // Health
+  Health?: ExpenseHealthRow['Health'];
+  Health_item?: string;
+  Health_description?: string;
+  // Investments
+  Investments?: ExpenseInvestmentsRow['Investments'];
+  Medium?: string;
 }
 
-export async function getExpensesAggregation(startDate: string, endDate: string, types: string[]): Promise<{ data: ExpenseAggregation[] | null; error: any }> {
-  let aggregationQuery = supabase
-    .from('expenses')
-    .select('Type, Date, Amount')
-    .gte('Date', startDate)
-    .lte('Date', endDate);
+export async function getExpensesAggregation(startDate: string, endDate: string, types: string[]): Promise<{ data: ExpenseFullRow[] | null; error: any }> {
+  let allRows: ExpenseFullRow[] = [];
 
-  if (types.length > 0) {
-    aggregationQuery = aggregationQuery.in('Type', types);
+  for(let page=0; ; page++) {
+    const from = page * 1000; 
+    const to = from + 999;
+
+    let aggregationQuery = supabase
+      .from('expenses')
+      .select('Type, Date, Amount, Description, Meal, Meal_place, Drink, Drink_place, Grocery, Grocery_description, Travel, Journey, Journey_details, Shopping, Need, Item, Utility, Frequency, Utility_description, Entertainment, Entertainment_description, Health, Health_item, Health_description, Investments, Medium')
+      .gte('Date', startDate)
+      .lte('Date', endDate)
+      .range(from, to);
+
+    if (types.length > 0) {
+      aggregationQuery = aggregationQuery.in('Type', types);
+    }
+
+    const { data, error } = await aggregationQuery;
+    if (error) {
+      return { data: null, error };
+    }
+    const fetchedRows = data as ExpenseFullRow[];
+    allRows = allRows.concat(fetchedRows);
+    if (fetchedRows.length < 1000) {
+      break; // No more pages
+    }
   }
-
-  const { data, error } = await aggregationQuery;
-
-  if (error) {
-    return { data: null, error };
-  }
-  return { data: data as ExpenseAggregation[], error: null };
+  return { data: allRows, error: null };
 }

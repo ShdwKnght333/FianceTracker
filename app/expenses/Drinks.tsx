@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 import { addDrinksExpense, getPopularDrinkPlaces } from "../../lib/expenseRatingService";
 import { ChipOption, Chips } from "../components/Chips";
@@ -79,7 +79,7 @@ export default function DrinksExpense() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={60}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={60}>
       <LinearGradient
         colors={["#43cea2", "#185a9d", "#f7971e", "#e94057"]}
         start={{ x: 0, y: 0 }}
