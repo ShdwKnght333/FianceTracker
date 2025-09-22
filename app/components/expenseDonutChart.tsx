@@ -7,11 +7,13 @@ interface ExpenseDonutChartProps {
   colors?: string[];
   currency?: string;
   onClose?: () => void;
+  title?: string; // new dynamic title (fallback to existing static text)
+  legendLabel?: string; // label shown above donut (fallback to "Types")
 }
 
 interface DonutSeg { label:string; value:number; start:number; end:number }
 
-export const ExpenseDonutChart: React.FC<ExpenseDonutChartProps> = ({ typeAgg, colors = ['#42A5F5','#66BB6A','#FFA726','#AB47BC','#EC407A','#26C6DA','#FF7043','#9CCC65','#7E57C2','#FFCA28','#26A69A'], currency='₹', onClose }) => {
+export const ExpenseDonutChart: React.FC<ExpenseDonutChartProps> = ({ typeAgg, colors = ['#42A5F5','#66BB6A','#FFA726','#AB47BC','#EC407A','#26C6DA','#FF7043','#9CCC65','#7E57C2','#FFCA28','#26A69A'], currency='₹', onClose, title, legendLabel }) => {
   const dims = useWindowDimensions();
   const [donutSelected, setDonutSelected] = useState<string | null>(null);
   const [segProgress, setSegProgress] = useState(1); // 0..1 global sequential progress
@@ -123,7 +125,7 @@ export const ExpenseDonutChart: React.FC<ExpenseDonutChartProps> = ({ typeAgg, c
   return (
     <View style={{ flex:1 }}>
       <View style={{ paddingTop: 60, paddingHorizontal:16, flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
-        <Text style={{ color:'#fff', fontSize:20, fontWeight:'700' }}>Expense Type Breakdown</Text>
+        <Text style={{ color:'#fff', fontSize:20, fontWeight:'700' }}>{title || 'Expense Type Breakdown'}</Text>
         {onClose && (
           <TouchableOpacity onPress={onClose}><Text style={{ color:'#90CAF9', fontSize:16 }}>Close</Text></TouchableOpacity>
         )}
@@ -211,7 +213,7 @@ export const ExpenseDonutChart: React.FC<ExpenseDonutChartProps> = ({ typeAgg, c
             onResponderTerminate={()=> { setDonutSelected(null); }}
           />
           <View style={{ position:'absolute', left:donutPadLeft, right:donutPadRight, top:donutPadTop/2 - 32, alignItems:'center' }}>
-              <Text style={{ color:'#fff', fontWeight:'600', fontSize:16 }}>Types</Text>
+              <Text style={{ color:'#fff', fontWeight:'600', fontSize:16 }}>{legendLabel || 'Types'}</Text>
           </View>
         </View>
       </View>

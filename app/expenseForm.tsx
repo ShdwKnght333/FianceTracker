@@ -1,7 +1,7 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Button, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Animated, Button, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ChipOption, Chips, ChipStyles } from "./components/Chips";
 
 export default function ExpenseForm() {
@@ -126,7 +126,7 @@ export default function ExpenseForm() {
   const monthOptions: ChipOption[] = months.map(m => ({ label: m }));
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={60}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={60}>
       <LinearGradient
         colors={["#8e24aa", "#43ea7f", "#00c853"]}
         start={{ x: 0, y: 0 }}

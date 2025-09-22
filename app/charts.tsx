@@ -4,12 +4,12 @@ import { useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import React, { useEffect, useMemo } from 'react';
 import { FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { getExpensesAggregation } from '../lib/expenseRatingService';
+import { getExpensesAggregation, type ExpenseFullRow } from '../lib/expenseRatingService';
 import { ExpenseDonutChart } from './components/expenseDonutChart';
 import { MonthlyExpenseLineChart } from './components/monthlyExpenseLineChart';
 
 const expenseSubTypes = [
-  'Drinks','Entertainment','Food','Groceries','Health','Investments','Other','Personal','Shopping','Travel','Utilities'
+  'Drinks','Entertainment','Food','Groceries','Medical','Investments','Other','Personal','Shopping','Travel','Utilities'
 ];
 
 export default function ChartsScreen() {
@@ -24,30 +24,25 @@ export default function ChartsScreen() {
 
   // Default date range state
   const [startMonth, setStartMonth] = React.useState('2023-01');
-  const [endMonth, setEndMonth] = React.useState('');
+  const [endMonth, setEndMonth] = React.useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
-  const { data, refetch, isLoading } = useQuery({
+  const { data, refetch, isLoading } = useQuery<ExpenseFullRow[]>({
     queryKey: ['expenseData', startMonth, endMonth, typeFilter],
     queryFn: async () => {
       if (!startMonth || !endMonth) return [];
-
       const [endYear, endMonthNum] = endMonth.split('-').map(Number);
       const lastDayOfMonth = new Date(endYear, endMonthNum, 0).getDate();
-      
       const startDate = `${startMonth}-01`;
       const endDate = `${endMonth}-${String(lastDayOfMonth).padStart(2, '0')}`;
-
       const { data: aggregationData, error } = await getExpensesAggregation(startDate, endDate, typeFilter);
-
       if (error) {
         console.error('Failed to fetch chart data:', error);
       }
-
-      return aggregationData?.map(item => ({
-          type: item.Type,
-          date: item.Date,
-          amount: item.Amount,
-      })) || [];
+      // Return full rows directly without redefining Type/Date/Amount
+      return aggregationData || [];
     },
     enabled: false,
   });
@@ -63,7 +58,7 @@ export default function ChartsScreen() {
       const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
       months.add(key);
     }
-    return Array.from(months).sort();
+    return Array.from(months).sort((a, b) => b.localeCompare(a));
   },[]);
 
   useEffect(() => {
@@ -91,13 +86,16 @@ export default function ChartsScreen() {
 
   // Aggregate month totals, filtered by range and type
   const monthAgg = useMemo(()=>{
+    console.log('Records for aggregation:', chartData.length);
     if (chartData.length === 0) return [];
     const map: Record<string, number> = {};
     chartData.forEach(r=>{
-      if (typeFilter.includes(r.type)) {
-        const d = new Date(r.date);
+      if (typeFilter.includes(r.Type)) {
+        const d = new Date(r.Date);
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-        map[key] = (map[key]||0)+r.amount;
+        map[key] = (map[key]||0)+r.Amount;
+      } else {
+        console.log('Skipping type', r.Type);
       }
     });
     const entries = Object.entries(map).sort(([a],[b])=> a.localeCompare(b));
@@ -112,9 +110,49 @@ export default function ChartsScreen() {
   const typeAgg = useMemo(()=>{
     if (chartData.length === 0) return [];
     const map: Record<string, number> = {};
-    chartData.forEach(r=>{ if (typeFilter.includes(r.type)) map[r.type] = (map[r.type]||0)+r.amount; });
+    chartData.forEach(r=>{ if (typeFilter.includes(r.Type)) map[r.Type] = (map[r.Type]||0)+r.Amount; });
     return Object.entries(map).sort((a,b)=> b[1]-a[1]);
   },[chartData, typeFilter]);
+
+  const singleSelectedType = useMemo(()=> typeFilter.length === 1 ? typeFilter[0] : null, [typeFilter]);
+
+  // Build subtype aggregation when a single type is selected
+  const subtypeAgg = useMemo(() => {
+    if (!singleSelectedType) return [] as [string, number][];
+    // Map expense Type to possible subtype field names in data
+    const subtypeFieldMap: Record<string, string[]> = {
+      Food: ['Meal'],
+      Drinks: ['Drink'],
+      Groceries: ['Grocery'],
+      Travel: ['Travel'],
+      Shopping: ['Shopping'],
+      Utilities: ['Utility'],
+      Entertainment: ['Entertainment'],
+      Medical: ['Health'],
+      Investments: ['Investments'],
+      Personal: [],
+      Other: []
+    };
+    const fields = subtypeFieldMap[singleSelectedType] || [];
+    if (!fields.length) return [];
+    const map: Record<string, number> = {};
+    chartData.forEach(r => {
+      if (r.Type !== singleSelectedType) return;
+      // Use first non-empty field among the list as label priority
+      let label: string | undefined;
+      for (const f of fields) {
+        const val = (r as any)[f];
+        if (val && typeof val === 'string') { label = val; break; }
+      }
+      if (!label) label = singleSelectedType;
+      map[label] = (map[label] || 0) + r.Amount;
+    });
+    return Object.entries(map).sort((a,b)=> b[1]-a[1]);
+  }, [chartData, singleSelectedType]);
+
+  const donutDataToUse = singleSelectedType && subtypeAgg.length > 0 ? subtypeAgg : typeAgg;
+  const donutTitle = singleSelectedType && subtypeAgg.length > 0 ? `${singleSelectedType} Spread` : 'Expense Type Breakdown';
+  const legendLabel = singleSelectedType && subtypeAgg.length > 0 ? 'Subtypes' : 'Types';
 
   // Orientation handling only for line chart now
   const enterFullscreen = async (type: 'line' | 'donut') => {
@@ -138,7 +176,7 @@ export default function ChartsScreen() {
         {isLine ? (
           <MonthlyExpenseLineChart monthAgg={monthAgg} onClose={exitFullscreen} />
         ) : (
-          <ExpenseDonutChart typeAgg={typeAgg} onClose={exitFullscreen} />
+          <ExpenseDonutChart typeAgg={donutDataToUse} onClose={exitFullscreen} title={donutTitle} legendLabel={legendLabel} />
         )}
       </LinearGradient>
     );
