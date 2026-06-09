@@ -1,10 +1,10 @@
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, KeyboardAvoidingView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { ChipOption, Chips } from "./components/Chips";
 import { GlassCard } from "./components/GlassCard";
+import { TopRightIconAction } from "./components/TopRightIconAction";
 
 const { width } = Dimensions.get('window');
 
@@ -87,6 +87,7 @@ export default function ExpenseForm() {
     "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
   ];
   const monthOptions: ChipOption[] = months.map(m => ({ label: m }));
+  const isPrimaryActionDisabled = !amount || !expenseType;
 
   return (
     <View style={styles.container}>
@@ -98,7 +99,10 @@ export default function ExpenseForm() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={60}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
-            <Text style={styles.title}>New Expense</Text>
+            <View style={styles.headerRow}>
+              <Text style={styles.title}>New Expense</Text>
+              <TopRightIconAction icon="arrow-forward" onPress={handleNext} disabled={isPrimaryActionDisabled} />
+            </View>
             
             <GlassCard style={styles.card} intensity={25}>
               <Text style={styles.label}>Select Category</Text>
@@ -140,9 +144,9 @@ export default function ExpenseForm() {
               />
 
               <TouchableOpacity 
-                style={[styles.nextButton, (!amount || !expenseType) && styles.disabledButton]} 
+                style={[styles.nextButton, isPrimaryActionDisabled && styles.disabledButton]} 
                 onPress={handleNext}
-                disabled={!amount || !expenseType}
+                disabled={isPrimaryActionDisabled}
               >
                 <Text style={styles.nextButtonText}>Continue</Text>
               </TouchableOpacity>
@@ -171,12 +175,18 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 24,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
   title: {
     fontSize: 32,
     fontWeight: '800',
     color: '#F8FAFC',
-    marginBottom: 24,
-    textAlign: 'center',
+    marginBottom: 0,
+    textAlign: 'left',
   },
   card: {
     padding: 24,

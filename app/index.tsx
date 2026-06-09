@@ -2,15 +2,25 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { ExpenseFullRow, getMonthlyTotal, getRecentTransactions, getYearlyTotal } from "../lib/expenseRatingService";
+import { ExpenseFullRow, getExpensesAggregation, getMonthlyTotal, getRecentTransactions, getYearlyTotal } from "../lib/expenseRatingService";
 import { GlassCard } from "./components/GlassCard";
 
 const { width } = Dimensions.get('window');
 
 export default function Dashboard() {
   const router = useRouter();
+  const allTypes = ['Drinks', 'Entertainment', 'Food', 'Groceries', 'Medical', 'Investments', 'Other', 'Personal', 'Shopping', 'Travel', 'Utilities'];
+  const typeIcons: Record<string, string> = {
+    Food: '🍽️', Drinks: '🍹', Groceries: '🛒', Travel: '🚗', Shopping: '🛍️',
+    Utilities: '💡', Entertainment: '🎬', Medical: '💊', Investments: '📈',
+    Personal: '👤', Other: '📦',
+  };
+  const spotlightType = useRef<string>(allTypes[Math.floor(Math.random() * allTypes.length)]).current;
+
   const [totalSpent, setTotalSpent] = useState<number>(0);
   const [yearlySpent, setYearlySpent] = useState<number>(0);
+  const [sixMonthAvg, setSixMonthAvg] = useState<number | null>(null);
+  const [spotlightTotal, setSpotlightTotal] = useState<number>(0);
   const [recentExpenses, setRecentExpenses] = useState<ExpenseFullRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCardIndex, setActiveCardIndex] = useState(0);
@@ -37,19 +47,35 @@ export default function Dashboard() {
 
   const fetchData = async () => {
     setLoading(true);
+    const now = new Date();
     const lastMonth = new Date();
     lastMonth.setMonth(lastMonth.getMonth() - 1);
     const monthName = lastMonth.toLocaleString('default', { month: 'long' });
     const year = String(lastMonth.getFullYear());
-    
-    const currentYear = String(new Date().getFullYear());
+    const currentYear = String(now.getFullYear());
 
-    const [total, yearly, recent] = await Promise.all([
+    // 6 months preceding last month (months -7 to -2 relative to now)
+    const avgStart = new Date(now.getFullYear(), now.getMonth() - 7, 1);
+    const avgEnd = new Date(now.getFullYear(), now.getMonth() - 1, 0);
+    const avgStartStr = `${avgStart.getFullYear()}-${String(avgStart.getMonth() + 1).padStart(2, '0')}-01`;
+    const avgEndStr = `${avgEnd.getFullYear()}-${String(avgEnd.getMonth() + 1).padStart(2, '0')}-${String(avgEnd.getDate()).padStart(2, '0')}`;
+    // Last 6 full months for spotlight card
+    const spotlightStart = new Date(now.getFullYear(), now.getMonth() - 6, 1);
+    const spotlightEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+    const spotlightStartStr = `${spotlightStart.getFullYear()}-${String(spotlightStart.getMonth() + 1).padStart(2, '0')}-01`;
+    const spotlightEndStr = `${spotlightEnd.getFullYear()}-${String(spotlightEnd.getMonth() + 1).padStart(2, '0')}-${String(spotlightEnd.getDate()).padStart(2, '0')}`;
+
+    const [total, yearly, recent, sixMonthData, spotlightData] = await Promise.all([
       getMonthlyTotal(monthName, year),
       getYearlyTotal(currentYear),
-      getRecentTransactions(5)
+      getRecentTransactions(5),
+      getExpensesAggregation(avgStartStr, avgEndStr, allTypes),
+      getExpensesAggregation(spotlightStartStr, spotlightEndStr, [spotlightType]),
     ]);
-    
+
+    const sixMonthSum = (sixMonthData.data || []).reduce((s, r) => s + r.Amount, 0);
+    setSixMonthAvg(sixMonthSum / 6);
+    setSpotlightTotal((spotlightData.data || []).reduce((s, r) => s + r.Amount, 0));
     setTotalSpent(total);
     setYearlySpent(yearly);
     setRecentExpenses(recent);
@@ -120,14 +146,27 @@ export default function Dashboard() {
                   <Text style={styles.cardAmount}>{loading ? "..." : formatCurrency(totalSpent)}</Text>
                   <View style={styles.cardFooter}>
                     <View style={styles.trendContainer}>
-                      <Text style={styles.trendIcon}>✨</Text>
-                      <Text style={styles.trendText}>Tracking your financial vibe</Text>
+                      {(() => {
+                        if (loading || sixMonthAvg === null || sixMonthAvg === 0) {
+                          return <Text style={styles.trendText}>—</Text>;
+                        }
+                        const pct = ((totalSpent - sixMonthAvg) / sixMonthAvg) * 100;
+                        const isUp = pct >= 0;
+                        return (
+                          <>
+                            <Text style={styles.trendIcon}>{isUp ? '📈' : '📉'}</Text>
+                            <Text style={[styles.trendText, { color: isUp ? '#F43F5E' : '#10B981' }]}>
+                              {isUp ? '+' : ''}{pct.toFixed(1)}% vs 6-month avg
+                            </Text>
+                          </>
+                        );
+                      })()}
                     </View>
                   </View>
                 </GlassCard>
 
                 <GlassCard style={{ ...styles.mainCard, width: width - 48 }} intensity={40}>
-                  <Text style={styles.cardLabel}>{new Date().getFullYear()} Expenditure (up to last month)</Text>
+                  <Text style={styles.cardLabel}>{new Date().getFullYear()} Expenditure (Year to Date)</Text>
                   <Text style={styles.cardAmount}>{loading ? "..." : formatCurrency(yearlySpent)}</Text>
                   <View style={styles.cardFooter}>
                     <View style={styles.trendContainer}>
@@ -136,10 +175,22 @@ export default function Dashboard() {
                     </View>
                   </View>
                 </GlassCard>
+
+                <GlassCard style={{ ...styles.mainCard, width: width - 48 }} intensity={40}>
+                  <Text style={styles.cardLabel}>{typeIcons[spotlightType]} {spotlightType} — Last 6 Months</Text>
+                  <Text style={styles.cardAmount}>{loading ? "..." : formatCurrency(spotlightTotal)}</Text>
+                  <View style={styles.cardFooter}>
+                    <View style={styles.trendContainer}>
+                      <Text style={styles.trendIcon}>🗓️</Text>
+                      <Text style={styles.trendText}>Total spend over last 6 months</Text>
+                    </View>
+                  </View>
+                </GlassCard>
               </ScrollView>
               <View style={styles.paginationDots}>
                 <View style={[styles.dot, activeCardIndex === 0 && styles.dotActive]} />
                 <View style={[styles.dot, activeCardIndex === 1 && styles.dotActive]} />
+                <View style={[styles.dot, activeCardIndex === 2 && styles.dotActive]} />
               </View>
             </View>
 

@@ -1,4 +1,3 @@
-import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -6,6 +5,7 @@ import { Alert, KeyboardAvoidingView, ScrollView, StatusBar, StyleSheet, Text, T
 import { addDrinksExpense, getPopularDrinkPlaces } from "../../lib/expenseRatingService";
 import { ChipOption, Chips } from "../components/Chips";
 import { GlassCard } from "../components/GlassCard";
+import { TopRightIconAction } from "../components/TopRightIconAction";
 
 const drinkTypes: ChipOption[] = [
   { label: "Milk", icon: "🥛" },
@@ -72,7 +72,10 @@ export default function DrinksExpense() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={60}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
           <View style={styles.content}>
-            <Text style={styles.title}>Drinks Details</Text>
+            <View style={styles.headerRow}>
+              <Text style={styles.title}>Drinks Details</Text>
+              <TopRightIconAction icon="checkmark" onPress={handleSubmit} disabled={!place || !drinkType || submitting} />
+            </View>
             <GlassCard style={styles.card} intensity={25}>
               <Text style={styles.label}>Drink Type</Text>
               <Chips options={drinkTypes} selected={drinkType} onSelect={setDrinkType} />
@@ -120,7 +123,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#020617' },
   scrollContent: { flexGrow: 1, paddingTop: 60, paddingBottom: 40 },
   content: { paddingHorizontal: 24 },
-  title: { fontSize: 32, fontWeight: '800', color: '#F8FAFC', textAlign: 'center', marginBottom: 24 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 },
+  title: { fontSize: 32, fontWeight: '800', color: '#F8FAFC', textAlign: 'left', marginBottom: 0 },
   card: { padding: 24, borderRadius: 32 },
   label: { fontSize: 12, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 8 },
   inputWrapper: { marginBottom: 24, zIndex: 10 },

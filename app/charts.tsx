@@ -37,7 +37,7 @@ export default function ChartsScreen() {
   const [isModalVisible, setIsModalVisible] = React.useState(false);
   const [modalMode, setModalMode] = React.useState<'start' | 'end'>('start');
 
-  const [startMonth, setStartMonth] = React.useState('2023-01');
+  const [startMonth, setStartMonth] = React.useState(() => `${new Date().getFullYear()}-01`);
   const [endMonth, setEndMonth] = React.useState(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -168,18 +168,18 @@ export default function ChartsScreen() {
     return expenseSubTypes.filter(t => set.has(t));
   }, [monthCategoryAgg, isSingleCategory]);
 
-  // YoY: fetch ALL data for the single selected category (ignores date range)
+  // YoY: fetch ALL data for all selected categories across all years (ignores date range)
   const { data: yoyData } = useQuery<ExpenseFullRow[]>({
     queryKey: ['yoyData', typeFilter],
     queryFn: async () => {
-      if (!isSingleCategory) return [];
-      const { data: rows, error } = await getExpensesAggregation('2000-01-01', '2099-12-31', [typeFilter[0]]);
+      const { data: rows, error } = await getExpensesAggregation('2024-01-01', '2099-12-31', typeFilter);
       if (error) console.error('Failed to fetch YoY data:', error);
       return rows || [];
     },
-    enabled: isSingleCategory && chartData.length > 0,
+    enabled: chartData.length > 0,
   });
   const yoyChartData = useMemo(() => yoyData ?? [], [yoyData]);
+  const yoyLabel = isSingleCategory ? typeFilter[0] : typeFilter.length === expenseSubTypes.length ? 'All Categories' : typeFilter.join(', ');
 
   const enterFullscreen = async (type: 'line' | 'donut' | 'stacked' | 'yoy') => {
     setFullscreenChart(type);
@@ -208,7 +208,7 @@ export default function ChartsScreen() {
           ) : fullscreenChart === 'stacked' ? (
             <ExpenseStackedBarChart monthCategoryAgg={monthCategoryAgg} categories={activeCategories} onClose={exitFullscreen} />
           ) : (
-            <ExpenseYoYChart data={yoyChartData} category={typeFilter[0] || ''} onClose={exitFullscreen} />
+            <ExpenseYoYChart data={yoyChartData} category={yoyLabel} onClose={exitFullscreen} />
           )}
         </LinearGradient>
       </View>
@@ -275,14 +275,12 @@ export default function ChartsScreen() {
                   <Text style={styles.chartTitle}>{isSingleCategory ? `${typeFilter[0]} Sub-type Stack` : 'Stacked Breakdown'}</Text>
                 </GlassCard>
               </TouchableOpacity>
-              {isSingleCategory && (
-                <TouchableOpacity style={styles.chartItem} onPress={()=>enterFullscreen('yoy')}>
-                  <GlassCard style={styles.chartInner} intensity={15}>
-                    <Text style={styles.chartIcon}>📅</Text>
-                    <Text style={styles.chartTitle}>{typeFilter[0]} Year over Year</Text>
-                  </GlassCard>
-                </TouchableOpacity>
-              )}
+              <TouchableOpacity style={styles.chartItem} onPress={()=>enterFullscreen('yoy')}>
+                <GlassCard style={styles.chartInner} intensity={15}>
+                  <Text style={styles.chartIcon}>📅</Text>
+                  <Text style={styles.chartTitle}>{isSingleCategory ? `${typeFilter[0]} ` : ''}Year over Year</Text>
+                </GlassCard>
+              </TouchableOpacity>
             </View>
           )}
 
