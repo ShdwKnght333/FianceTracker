@@ -1,182 +1,451 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from "expo-router";
-import { useRef, useState } from "react";
-import { Animated, StyleSheet, Text, TouchableWithoutFeedback, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ExpenseFullRow, getMonthlyTotal, getRecentTransactions, getYearlyTotal } from "../lib/expenseRatingService";
+import { GlassCard } from "./components/GlassCard";
 
-export default function Random() {
+const { width } = Dimensions.get('window');
+
+export default function Dashboard() {
   const router = useRouter();
-  const [expandingTile, setExpandingTile] = useState<null | "expense" | "food" | "dish" | "charts">(null);
-  const flipAnim1 = useRef(new Animated.Value(0)).current;
-  const flipAnim2 = useRef(new Animated.Value(0)).current;
-  const flipAnim3 = useRef(new Animated.Value(0)).current; // new animation for dish viewer
-  const flipAnim4 = useRef(new Animated.Value(0)).current; // charts
+  const [totalSpent, setTotalSpent] = useState<number>(0);
+  const [yearlySpent, setYearlySpent] = useState<number>(0);
+  const [recentExpenses, setRecentExpenses] = useState<ExpenseFullRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeCardIndex, setActiveCardIndex] = useState(0);
+  const cardScrollRef = useRef<ScrollView>(null);
+  
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
-  const expandTile = (animation: Animated.Value, navigateTo: "/expenseForm" | "/foodRating" | "/dishViewer" | "/charts", tile: "expense" | "food" | "dish" | "charts") => {
-    setExpandingTile(tile);
-    Animated.timing(animation, {
-      toValue: 1,
-      duration: 800,
-      useNativeDriver: true,
-    }).start(() => {
-      router.push(navigateTo as any);
-      setTimeout(() => {
-        animation.setValue(0);
-        setExpandingTile(null);
-      }, 100);
-    });
+  useEffect(() => {
+    fetchData();
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1000,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    const lastMonth = new Date();
+    lastMonth.setMonth(lastMonth.getMonth() - 1);
+    const monthName = lastMonth.toLocaleString('default', { month: 'long' });
+    const year = String(lastMonth.getFullYear());
+    
+    const currentYear = String(new Date().getFullYear());
+
+    const [total, yearly, recent] = await Promise.all([
+      getMonthlyTotal(monthName, year),
+      getYearlyTotal(currentYear),
+      getRecentTransactions(5)
+    ]);
+    
+    setTotalSpent(total);
+    setYearlySpent(yearly);
+    setRecentExpenses(recent);
+    setLoading(false);
   };
 
-  const tileStyle = (animation: Animated.Value) => ({
-    transform: [
-      {
-        scale: animation.interpolate({
-          inputRange: [0, 1],
-          outputRange: [1, 64], // Scale up to 8x original size
-        }),
-      },
-    ],
-    borderRadius: animation.interpolate({
-      inputRange: [0, 0.5, 1],
-      outputRange: [20, 50, 0], // Start rounded, become less rounded, then square
-    }),
-    opacity: animation.interpolate({
-      inputRange: [0, 0.8, 1],
-      outputRange: [.8, 0.9, 1], // Fade out as it expands
-    }),
-  });
+  const handleNavigate = (path: string) => {
+    router.push(path as any);
+  };
 
-  const textOpacity = (animation: Animated.Value) =>
-    animation.interpolate({
-      inputRange: [0, 0.33, 1],
-      outputRange: [1, 0, 0], // Fade out in first third
-    });
+  const getGreeting = () => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good Morning';
+    if (hour < 17) return 'Good Afternoon';
+    return 'Good Evening';
+  };
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency: 'INR',
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
 
   return (
-    <LinearGradient
-      colors={["#43cea2", "#185a9d", "#f7971e"]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.gradientBackground}
-    >
-      <Text style={styles.title}>Welcome</Text>
-      {(expandingTile === null || expandingTile === "expense") && (
-        <TouchableWithoutFeedback
-          onPress={() => expandTile(flipAnim1, "/expenseForm", "expense")}
-        >
-          <Animated.View style={[styles.tile, tileStyle(flipAnim1)]}>
-            <LinearGradient
-              colors={["#8e24aa", "#43ea7f", "#00c853"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.gradientTile}
-            >
-              <Animated.Text style={[styles.tileText, { opacity: textOpacity(flipAnim1) }]}>Submit an Expense</Animated.Text>
-            </LinearGradient>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={["#0F172A", "#020617"]}
+        style={StyleSheet.absoluteFill}
+      />
+      
+      {/* Decorative Gradients */}
+      <View style={[styles.circle, { top: -100, right: -100, backgroundColor: 'rgba(16, 185, 129, 0.15)' }]} />
+      <View style={[styles.circle, { bottom: -150, left: -100, backgroundColor: 'rgba(59, 130, 246, 0.15)' }]} />
+
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <Animated.View style={[styles.header, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            <View>
+              <Text style={styles.greeting}>{getGreeting()}</Text>
+              <Text style={styles.date}>{new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
+            </View>
+            <View style={styles.profileBadge}>
+              <Text style={styles.profileInitial}>S</Text>
+            </View>
           </Animated.View>
-        </TouchableWithoutFeedback>
-      )}
-      {(expandingTile === null || expandingTile === "food") && (
-        <View style={{ height: 20 }} />
-      )}
-      {(expandingTile === null || expandingTile === "food") && (
-        <TouchableWithoutFeedback
-          onPress={() => expandTile(flipAnim2, "/foodRating", "food")}
-        >
-          <Animated.View style={[styles.tile, tileStyle(flipAnim2)]}>
-            <LinearGradient
-              colors={["#FFA726", "#FFEB3B", "#FFD600"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.gradientTile}
-            >
-              <Animated.Text style={[styles.tileText, { opacity: textOpacity(flipAnim2) }]}>Submit a Food Rating</Animated.Text>
-            </LinearGradient>
+
+          <Animated.View style={[styles.content, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+            {/* Swipable Expenditure Cards */}
+            <View style={styles.cardCarousel}>
+              <ScrollView
+                ref={cardScrollRef}
+                horizontal
+                pagingEnabled
+                showsHorizontalScrollIndicator={false}
+                onMomentumScrollEnd={(e) => {
+                  const index = Math.round(e.nativeEvent.contentOffset.x / (width - 48));
+                  setActiveCardIndex(index);
+                }}
+                decelerationRate="fast"
+                snapToInterval={width - 48}
+                contentContainerStyle={{ gap: 0 }}
+              >
+                <GlassCard style={{ ...styles.mainCard, width: width - 48 }} intensity={40}>
+                  <Text style={styles.cardLabel}>Last Month's Expenditure</Text>
+                  <Text style={styles.cardAmount}>{loading ? "..." : formatCurrency(totalSpent)}</Text>
+                  <View style={styles.cardFooter}>
+                    <View style={styles.trendContainer}>
+                      <Text style={styles.trendIcon}>✨</Text>
+                      <Text style={styles.trendText}>Tracking your financial vibe</Text>
+                    </View>
+                  </View>
+                </GlassCard>
+
+                <GlassCard style={{ ...styles.mainCard, width: width - 48 }} intensity={40}>
+                  <Text style={styles.cardLabel}>{new Date().getFullYear()} Expenditure (up to last month)</Text>
+                  <Text style={styles.cardAmount}>{loading ? "..." : formatCurrency(yearlySpent)}</Text>
+                  <View style={styles.cardFooter}>
+                    <View style={styles.trendContainer}>
+                      <Text style={styles.trendIcon}>📅</Text>
+                      <Text style={styles.trendText}>Year-to-date spending</Text>
+                    </View>
+                  </View>
+                </GlassCard>
+              </ScrollView>
+              <View style={styles.paginationDots}>
+                <View style={[styles.dot, activeCardIndex === 0 && styles.dotActive]} />
+                <View style={[styles.dot, activeCardIndex === 1 && styles.dotActive]} />
+              </View>
+            </View>
+
+            <View style={styles.grid}>
+              <TouchableOpacity 
+                activeOpacity={0.8} 
+                style={styles.gridItem}
+                onPress={() => handleNavigate('/expenseForm')}
+              >
+                <GlassCard intensity={25}>
+                  <View style={[styles.iconCircle, { backgroundColor: 'rgba(16, 185, 129, 0.2)' }]}>
+                    <Text style={styles.actionIcon}>➕</Text>
+                  </View>
+                  <Text style={styles.actionTitle}>Add Expense</Text>
+                  <Text style={styles.actionDesc}>Quick entry</Text>
+                </GlassCard>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                activeOpacity={0.8} 
+                style={styles.gridItem}
+                onPress={() => handleNavigate('/charts')}
+              >
+                <GlassCard intensity={25}>
+                  <View style={[styles.iconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.2)' }]}>
+                    <Text style={styles.actionIcon}>📊</Text>
+                  </View>
+                  <Text style={styles.actionTitle}>Insights</Text>
+                  <Text style={styles.actionDesc}>View charts</Text>
+                </GlassCard>
+              </TouchableOpacity>
+            </View>
+
+            {/* Recent Transactions */}
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Recent Activity</Text>
+              <TouchableOpacity onPress={() => handleNavigate('/charts')}>
+                <Text style={styles.viewAll}>View All</Text>
+              </TouchableOpacity>
+            </View>
+
+            {recentExpenses.length > 0 ? (
+              recentExpenses.map((expense, index) => (
+                <GlassCard key={index} style={styles.transactionCard} intensity={15}>
+                  <View style={styles.transactionRow}>
+                    <View style={styles.transactionIconContainer}>
+                      <Text style={styles.transactionIcon}>
+                        {expense.Type === 'Food' ? '🍽️' : 
+                         expense.Type === 'Drinks' ? '🍹' :
+                         expense.Type === 'Groceries' ? '🛒' :
+                         expense.Type === 'Travel' ? '🚗' :
+                         expense.Type === 'Shopping' ? '🛍️' :
+                         expense.Type === 'Utilities' ? '💡' :
+                         expense.Type === 'Entertainment' ? '🎬' :
+                         expense.Type === 'Medical' ? '💊' :
+                         expense.Type === 'Investments' ? '📈' :
+                         expense.Type === 'Personal' ? '👤' : '📦'}
+                      </Text>
+                    </View>
+                    <View style={styles.transactionDetails}>
+                      <Text style={styles.transactionType}>{expense.Type}</Text>
+                      <Text style={styles.transactionDate}>{new Date(expense.Date).toLocaleDateString()}</Text>
+                    </View>
+                    <Text style={styles.transactionAmount}>₹{expense.Amount}</Text>
+                  </View>
+                </GlassCard>
+              ))
+            ) : (
+              <GlassCard style={styles.emptyCard} intensity={10}>
+                <Text style={styles.emptyText}>No recent expenses found. Add one to get started!</Text>
+              </GlassCard>
+            )}
+
+            {/* Quick Tip */}
+            <GlassCard style={styles.tipCard} intensity={15}>
+              <View style={styles.tipRow}>
+                <Text style={styles.tipEmoji}>💡</Text>
+                <Text style={styles.tipText}>Consistency is key to financial freedom. Keep tracking!</Text>
+              </View>
+            </GlassCard>
           </Animated.View>
-        </TouchableWithoutFeedback>
-      )}
-      {(expandingTile === null || expandingTile === "dish") && (
-        <View style={{ height: 20 }} />
-      )}
-      {(expandingTile === null || expandingTile === "dish") && (
-        <TouchableWithoutFeedback
-          onPress={() => expandTile(flipAnim3, "/dishViewer", "dish")}
-        >
-          <Animated.View style={[styles.tile, tileStyle(flipAnim3)]}>
-            <LinearGradient
-              colors={["#2196F3", "#21CBF3", "#64B5F6"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.gradientTile}
-            >
-              <Animated.Text style={[styles.tileText, { opacity: textOpacity(flipAnim3) }]}>View a Dish</Animated.Text>
-            </LinearGradient>
-          </Animated.View>
-        </TouchableWithoutFeedback>
-      )}
-      {(expandingTile === null || expandingTile === "charts") && (
-        <View style={{ height: 20 }} />
-      )}
-      {(expandingTile === null || expandingTile === "charts") && (
-        <TouchableWithoutFeedback
-          onPress={() => expandTile(flipAnim4, "/charts", "charts")}
-        >
-          <Animated.View style={[styles.tile, tileStyle(flipAnim4)]}>
-            <LinearGradient
-              colors={["#0f2027", "#203a43", "#2c5364"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.gradientTile}
-            >
-              <Animated.Text style={[styles.tileText, { opacity: textOpacity(flipAnim4) }]}>View Charts</Animated.Text>
-            </LinearGradient>
-          </Animated.View>
-        </TouchableWithoutFeedback>
-      )}
-    </LinearGradient>
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradientBackground: {
+  container: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 20,
+    backgroundColor: '#020617',
   },
-  title: {
-    fontSize: 32,
-    marginBottom: 50,
-    color: "#ffffff",
-    fontWeight: "bold",
-    textAlign: "center",
+  safeArea: {
+    flex: 1,
   },
-  tile: {
-    width: 200,
-    height: 120,
-    borderRadius: 20,
-    backgroundColor: "#4CAF50",
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+  scrollContent: {
+    paddingBottom: 40,
   },
-  gradientTile: {
-    ...StyleSheet.flatten({
-      width: '100%',
-      height: '100%',
-      borderRadius: 20,
-      justifyContent: 'center',
-      alignItems: 'center',
-    }),
+  circle: {
+    position: 'absolute',
+    width: 300,
+    height: 300,
+    borderRadius: 150,
   },
-  tileText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#ffffff",
-    textAlign: "center",
-    paddingHorizontal: 10,
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    marginBottom: 32,
+  },
+  greeting: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  date: {
+    fontSize: 14,
+    color: '#94A3B8',
+    marginTop: 4,
+  },
+  profileBadge: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#1E293B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+  },
+  profileInitial: {
+    color: '#10B981',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  content: {
+    paddingHorizontal: 24,
+  },
+  mainCard: {
+    marginBottom: 0,
+  },
+  cardCarousel: {
+    marginBottom: 24,
+  },
+  paginationDots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    marginHorizontal: 4,
+  },
+  dotActive: {
+    backgroundColor: '#10B981',
+    width: 20,
+  },
+  cardLabel: {
+    fontSize: 14,
+    color: '#94A3B8',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+  },
+  cardAmount: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    marginVertical: 12,
+  },
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  trendContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+  },
+  trendIcon: {
+    fontSize: 14,
+    marginRight: 6,
+  },
+  trendText: {
+    color: '#10B981',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  grid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+  },
+  gridItem: {
+    width: (width - 48 - 16) / 2,
+  },
+  iconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  actionIcon: {
+    fontSize: 20,
+  },
+  actionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#F8FAFC',
+    marginBottom: 4,
+  },
+  actionDesc: {
+    fontSize: 12,
+    color: '#94A3B8',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  viewAll: {
+    fontSize: 14,
+    color: '#3B82F6',
+    fontWeight: '600',
+  },
+  transactionCard: {
+    marginBottom: 12,
+  },
+  transactionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  transactionIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  transactionIcon: {
+    fontSize: 20,
+  },
+  transactionDetails: {
+    flex: 1,
+  },
+  transactionType: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F8FAFC',
+  },
+  transactionDate: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  transactionAmount: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#F8FAFC',
+  },
+  emptyCard: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  emptyText: {
+    color: '#94A3B8',
+    textAlign: 'center',
+    fontSize: 14,
+  },
+  tipCard: {
+    marginTop: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+  },
+  tipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  tipEmoji: {
+    fontSize: 20,
+    marginRight: 12,
+  },
+  tipText: {
+    flex: 1,
+    fontSize: 14,
+    color: '#CBD5E1',
+    lineHeight: 20,
   },
 });

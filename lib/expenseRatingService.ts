@@ -290,3 +290,56 @@ export async function getExpensesAggregation(startDate: string, endDate: string,
   }
   return { data: allRows, error: null };
 }
+export async function getMonthlyTotal(monthName: string, year: string): Promise<number> {
+  const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+  const monthIndex = monthNames.indexOf(monthName);
+  if (monthIndex === -1) return 0;
+
+  const startDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+  const endDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-31`;
+
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('Amount')
+    .gte('Date', startDate)
+    .lte('Date', endDate);
+
+  if (error || !data) return 0;
+  return data.reduce((sum, row) => sum + (row.Amount || 0), 0);
+}
+
+export async function getYearlyTotal(year: string): Promise<number> {
+  const now = new Date();
+  const currentYear = String(now.getFullYear());
+  // If it's the current year, sum up to end of last month; otherwise full year
+  let endMonth: number;
+  if (year === currentYear) {
+    endMonth = now.getMonth(); // 0-indexed, so this is last month's 1-indexed month
+    if (endMonth === 0) return 0; // January, no previous months
+  } else {
+    endMonth = 12;
+  }
+
+  const startDate = `${year}-01-01`;
+  const endDate = `${year}-${String(endMonth).padStart(2, '0')}-31`;
+
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('Amount')
+    .gte('Date', startDate)
+    .lte('Date', endDate);
+
+  if (error || !data) return 0;
+  return data.reduce((sum, row) => sum + (row.Amount || 0), 0);
+}
+
+export async function getRecentTransactions(limit = 5): Promise<ExpenseFullRow[]> {
+  const { data, error } = await supabase
+    .from('expenses')
+    .select('*')
+    .order('Date', { ascending: false })
+    .limit(limit);
+
+  if (error || !data) return [];
+  return data as ExpenseFullRow[];
+}

@@ -1,9 +1,11 @@
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { Alert, KeyboardAvoidingView, ScrollView, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, KeyboardAvoidingView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { addGroceriesExpense, getPopularGroceryDescriptions } from "../../lib/expenseRatingService";
 import { ChipOption, Chips } from "../components/Chips";
+import { GlassCard } from "../components/GlassCard";
 
 const groceryTypes: ChipOption[] = [
   { label: "Convenience Store", icon: "🏪" },
@@ -26,21 +28,18 @@ export default function GroceriesExpense() {
   const [popularDescriptions, setPopularDescriptions] = useState<string[]>([]);
   const [loadingDescriptions, setLoadingDescriptions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
   const params = useLocalSearchParams();
   const amount = params.amount as string | undefined;
   const date = params.date as string | undefined;
 
-  const filteredSuggestions = popularDescriptions;
-
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
       setLoadingDescriptions(true);
       const { data } = await getPopularGroceryDescriptions(description || undefined, 5);
-      if (data) setPopularDescriptions(data.map(d => d.place)); // RPC returns { place }
+      if (data) setPopularDescriptions(data.map(d => d.place));
       setLoadingDescriptions(false);
     }, 300);
     return () => {
@@ -48,20 +47,9 @@ export default function GroceriesExpense() {
     };
   }, [description]);
 
-  function handleDescriptionChange(text: string) {
-    setDescription(text);
-    setShowSuggestions(true);
-  }
-
-  function handleSuggestionSelect(suggestion: string) {
-    setDescription(suggestion);
-    setShowSuggestions(false);
-  }
-
   async function handleSubmit() {
-    setSubmitError(null);
     if (!groceryType || !amount || !date) {
-      Alert.alert('Missing Data', 'Grocery type, amount and date are required');
+      Alert.alert('Missing Data', 'Grocery type is required');
       return;
     }
     setSubmitting(true);
@@ -76,63 +64,84 @@ export default function GroceriesExpense() {
     const { error } = await addGroceriesExpense(payload);
     setSubmitting(false);
     if (error) {
-      setSubmitError(error.message || 'Failed to save');
-      Alert.alert('Error', submitError || 'Failed to save');
+      Alert.alert('Error', error.message || 'Failed to save');
       return;
     }
-    Alert.alert('Saved', 'Groceries expense saved');
-    router.back();
+    Alert.alert('Success', 'Groceries expense saved');
+    router.dismissAll();
+    router.replace('/');
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={60}>
-      <LinearGradient
-        colors={["#43cea2", "#185a9d", "#f7971e", "#e94057"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={{ flex: 1 }}
-      >
-        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }} keyboardShouldPersistTaps="handled">
-          <View style={{ width: '100%', alignItems: 'center' }}>
-            <Text style={{ color: '#fff', fontSize: 22, marginBottom: 24 }}>Groceries Expense Details</Text>
-            <Chips
-              options={groceryTypes}
-              selected={groceryType}
-              onSelect={setGroceryType}
-            />
-            <View style={{ width: '100%', marginBottom: 16 }}>
-              <TextInput
-                style={{ backgroundColor: '#fff', borderRadius: 8, padding: 12, width: '100%' }}
-                placeholder="Enter description (optional)..."
-                value={description}
-                onChangeText={handleDescriptionChange}
-                onFocus={() => setShowSuggestions(true)}
-                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              />
-              {showSuggestions && filteredSuggestions.length > 0 && (
-                <View style={{ backgroundColor: '#fff', borderRadius: 8, position: 'absolute', top: 48, left: 0, right: 0, zIndex: 10, maxHeight: 160 }}>
-                  {loadingDescriptions && (
-                    <Text style={{ padding: 8, color: '#666' }}>Loading...</Text>
-                  )}
-                  {filteredSuggestions.slice(0,5).map(item => (
-                    <TouchableOpacity key={item} onPress={() => handleSuggestionSelect(item)} style={{ padding: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}>
-                      <Text style={{ color: '#222', fontSize: 16 }}>{item}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-            </View>
-            {submitError && <Text style={{ color: 'red', marginBottom: 8 }}>{submitError}</Text>}
-            <TouchableOpacity
-              style={{ backgroundColor: groceryType && !submitting ? '#FFA726' : '#FFE0B2', borderRadius: 8, padding: 14, width: '100%', alignItems: 'center' }}
-              disabled={!groceryType || submitting}
-              onPress={handleSubmit}
-            >
-              <Text style={{ color: groceryType && !submitting ? '#fff' : '#aaa', fontSize: 16, fontWeight: 'bold' }}>{submitting ? 'Saving...' : 'Submit'}</Text>
-            </TouchableOpacity>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient colors={["#0F172A", "#020617"]} style={StyleSheet.absoluteFill} />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={60}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <View style={styles.content}>
+            <Text style={styles.title}>Groceries</Text>
+            <GlassCard style={styles.card} intensity={25}>
+              <Text style={styles.label}>Source</Text>
+              <Chips options={groceryTypes} selected={groceryType} onSelect={setGroceryType} />
+              
+              <Text style={styles.label}>Description (Optional)</Text>
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Weekly veggies, Snacks"
+                  placeholderTextColor="#64748B"
+                  value={description}
+                  onChangeText={(t) => { setDescription(t); setShowSuggestions(true); }}
+                  onFocus={() => setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                />
+                {showSuggestions && popularDescriptions.length > 0 && (
+                  <View style={styles.suggestionsContainer}>
+                    {popularDescriptions.map(item => (
+                      <TouchableOpacity key={item} onPress={() => { setDescription(item); setShowSuggestions(false); }} style={styles.suggestionItem}>
+                        <Text style={styles.suggestionText}>{item}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.infoRow}>
+                <View style={styles.infoBox}><Text style={styles.infoLabel}>Amount</Text><Text style={styles.infoValue}>₹{amount}</Text></View>
+                <View style={styles.infoBox}><Text style={styles.infoLabel}>Date</Text><Text style={styles.infoValue}>{date}</Text></View>
+              </View>
+
+              <TouchableOpacity style={[styles.submitButton, (!groceryType || submitting) && styles.disabledButton]} onPress={handleSubmit} disabled={!groceryType || submitting}>
+                <Text style={styles.submitButtonText}>{submitting ? 'Saving...' : 'Submit'}</Text>
+              </TouchableOpacity>
+            </GlassCard>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}><Text style={styles.backButtonText}>Back</Text></TouchableOpacity>
           </View>
         </ScrollView>
-      </LinearGradient>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#020617' },
+  scrollContent: { flexGrow: 1, paddingTop: 60, paddingBottom: 40 },
+  content: { paddingHorizontal: 24 },
+  title: { fontSize: 32, fontWeight: '800', color: '#F8FAFC', textAlign: 'center', marginBottom: 24 },
+  card: { padding: 24, borderRadius: 32 },
+  label: { fontSize: 12, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12, marginTop: 8 },
+  inputWrapper: { marginBottom: 24, zIndex: 10 },
+  input: { height: 56, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderRadius: 16, paddingHorizontal: 16, color: '#F8FAFC', fontSize: 18, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)' },
+  suggestionsContainer: { position: 'absolute', top: 60, left: 0, right: 0, backgroundColor: '#1E293B', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.1)', overflow: 'hidden' },
+  suggestionItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255, 255, 255, 0.05)' },
+  suggestionText: { color: '#F8FAFC', fontSize: 16 },
+  infoRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  infoBox: { flex: 1, backgroundColor: 'rgba(255, 255, 255, 0.03)', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
+  infoLabel: { fontSize: 10, color: '#64748B', marginBottom: 4, textTransform: 'uppercase' },
+  infoValue: { fontSize: 14, fontWeight: '700', color: '#CBD5E1' },
+  submitButton: { backgroundColor: '#10B981', height: 56, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginTop: 8 },
+  disabledButton: { backgroundColor: '#1E293B' },
+  submitButtonText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  backButton: { marginTop: 24, alignSelf: 'center' },
+  backButtonText: { color: '#64748B', fontSize: 16, fontWeight: '600' }
+});
