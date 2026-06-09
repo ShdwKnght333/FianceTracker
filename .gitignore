@@ -17,6 +17,7 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+android/app/src/main/res/drawable-*/assets_images_*
 
 # Metro
 .metro-health-check*

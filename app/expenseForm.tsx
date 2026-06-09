@@ -1,8 +1,12 @@
+import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
-import { Animated, Button, KeyboardAvoidingView, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { ChipOption, Chips, ChipStyles } from "./components/Chips";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Dimensions, KeyboardAvoidingView, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ChipOption, Chips } from "./components/Chips";
+import { GlassCard } from "./components/GlassCard";
+
+const { width } = Dimensions.get('window');
 
 export default function ExpenseForm() {
   const [amount, setAmount] = useState("");
@@ -12,9 +16,8 @@ export default function ExpenseForm() {
   const [year, setYear] = useState(String(new Date().getFullYear()));
   const [yearError, setYearError] = useState("");
   const router = useRouter();
-  const scaleAnim = useRef(new Animated.Value(13)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
-  // Expense type chips
   const expenseTypes: ChipOption[] = [
     { label: "Food", icon: "🍽️" },
     { label: 'Drinks', icon: '🍹' },
@@ -28,16 +31,8 @@ export default function ExpenseForm() {
     { label: 'Personal', icon: '👤' },
     { label: "Other", icon: "📦" },
   ];
-  const chipStyles: ChipStyles = {
-    chipsRow: styles.chipsRow,
-    chip: styles.chip,
-    chipSelected: styles.chipSelected,
-    chipIcon: styles.chipIcon,
-    chipText: styles.chipText,
-    chipTextSelected: styles.chipTextSelected,
-  };
 
-  const expenseTypeToRoute: Record<string, "/expenses/Food" | "/expenses/Drinks" | "/expenses/Groceries" | "/expenses/Travel" | "/expenses/Shopping" | "/expenses/Utilities" | "/expenses/Entertainment" | "/expenses/Health" | "/expenses/Investments" | "/expenses/Personal" | "/expenses/Other"> = {
+  const expenseTypeToRoute: Record<string, string> = {
     Food: '/expenses/Food',
     Drinks: '/expenses/Drinks',
     Groceries: '/expenses/Groceries',
@@ -52,71 +47,39 @@ export default function ExpenseForm() {
   };
 
   useEffect(() => {
-    Animated.timing(scaleAnim, {
+    Animated.timing(fadeAnim, {
       toValue: 1,
-      duration: 500,
+      duration: 600,
       useNativeDriver: true,
     }).start();
-  }, [scaleAnim]);
+  }, []);
 
   const handleAmountChange = (text: string) => {
-    // Remove non-numeric except dot
     let sanitized = text.replace(/[^0-9.]/g, "");
-    // Only one dot allowed
     if ((sanitized.match(/\./g) || []).length > 1) {
       sanitized = sanitized.replace(/\.+$/, "");
     }
     setAmount(sanitized);
-    // Validate
     if (!sanitized || isNaN(Number(sanitized))) {
-      setAmountError("Please enter a valid number");
+      setAmountError("Please enter a valid amount");
     } else {
       setAmountError("");
     }
   };
 
-  const handleYearChange = (text: string) => {
-    const sanitized = text.replace(/[^0-9]/g, "");
-    setYear(sanitized);
-    const currentYear = new Date().getFullYear();
-    const numYear = Number(sanitized);
-    if (!sanitized || isNaN(numYear) || numYear < currentYear - 10 || numYear > currentYear + 10) {
-      setYearError(`Enter a valid year between ${currentYear - 10} and ${currentYear + 10}`);
-    } else {
-      setYearError("");
-    }
-  };
-
   const handleNext = () => {
-    if (!amount || isNaN(Number(amount))) {
-      setAmountError("Please enter a valid number");
-      return;
-    }
-    if (!expenseType) {
-      alert("Please select an expense type.");
-      return;
-    }
-    if (!month) {
-      alert("Please select a month.");
-      return;
-    }
-    if (!year || !!yearError) {
-      setYearError("Please enter a valid year.");
-      return;
-    }
+    if (!amount || isNaN(Number(amount))) return;
+    if (!expenseType) return;
+    
     const route = expenseTypeToRoute[expenseType];
     if (route) {
       const monthsArr = [
         "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"
       ];
       const monthIndex = monthsArr.indexOf(month);
-      const currentDay = new Date().getDate();
-      const day = Math.min(currentDay, 25); // cap at 25
+      const day = Math.min(new Date().getDate(), 25);
       const dateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-      // Removed month and year from params; only passing amount and computed date
-      router.replace({ pathname: route, params: { amount, date: dateStr } });
-    } else {
-      alert("Unknown expense type selected.");
+      router.replace({ pathname: route as any, params: { amount, date: dateStr } });
     }
   };
 
@@ -126,126 +89,176 @@ export default function ExpenseForm() {
   const monthOptions: ChipOption[] = months.map(m => ({ label: m }));
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={60}>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
       <LinearGradient
-        colors={["#8e24aa", "#43ea7f", "#00c853"]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradientBackground}
-      >
+        colors={["#0F172A", "#020617"]}
+        style={StyleSheet.absoluteFill}
+      />
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={'padding'} keyboardVerticalOffset={60}>
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          <Animated.View style={[styles.formContainer, { transform: [{ scale: scaleAnim }] }]}>
-            <Text style={styles.title}>Submit an Expense</Text>
-            {/* Expense Type Chips */}
-            <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' }}>Select Expense Type</Text>
-            <Chips
-              options={expenseTypes}
-              selected={expenseType}
-              onSelect={setExpenseType}
-              styles={chipStyles}
-            />
-            <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4, alignSelf: 'flex-start' }}>Select Month</Text>
-            <Chips
-              options={monthOptions}
-              selected={month}
-              onSelect={setMonth}
-            />
-            <View style={{ width: '100%', marginBottom: 16 }}>
-              <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4 }}>Enter Amount</Text>
-              <Text style={{ position: 'absolute', left: 12, top: 34, fontSize: 18, color: '#222' }}>₹</Text>
-              <TextInput
-                style={[styles.input, { paddingLeft: 28 }]}
-                placeholder="Amount"
-                keyboardType="numeric"
-                value={amount}
-                onChangeText={handleAmountChange}
+          <Animated.View style={[styles.content, { opacity: fadeAnim }]}>
+            <Text style={styles.title}>New Expense</Text>
+            
+            <GlassCard style={styles.card} intensity={25}>
+              <Text style={styles.label}>Select Category</Text>
+              <Chips
+                options={expenseTypes}
+                selected={expenseType}
+                onSelect={setExpenseType}
               />
-            </View>
-            <View style={{ width: '100%', marginBottom: 16 }}>
-              <Text style={{ fontSize: 16, fontWeight: '500', marginBottom: 4 }}>Enter Year</Text>
+
+              <Text style={styles.label}>Amount</Text>
+              <View style={styles.inputContainer}>
+                <Text style={styles.currencySymbol}>₹</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="0.00"
+                  placeholderTextColor="#64748B"
+                  keyboardType="numeric"
+                  value={amount}
+                  onChangeText={handleAmountChange}
+                />
+              </View>
+              {amountError ? <Text style={styles.errorText}>{amountError}</Text> : null}
+
+              <Text style={styles.label}>Select Month</Text>
+              <Chips
+                options={monthOptions}
+                selected={month}
+                onSelect={setMonth}
+              />
+
+              <Text style={styles.label}>Year</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, styles.yearInput]}
                 placeholder="Year"
+                placeholderTextColor="#64748B"
                 keyboardType="numeric"
                 value={year}
-                onChangeText={handleYearChange}
+                onChangeText={setYear}
               />
-              {yearError ? <Text style={{ color: 'red', marginBottom: 8 }}>{yearError}</Text> : null}
-            </View>
-            {amountError ? <Text style={{ color: 'red', marginBottom: 8 }}>{amountError}</Text> : null}
-            <Button title="Next" onPress={handleNext} disabled={!!amountError || !amount || !expenseType || !month || !year || !!yearError} />
+
+              <TouchableOpacity 
+                style={[styles.nextButton, (!amount || !expenseType) && styles.disabledButton]} 
+                onPress={handleNext}
+                disabled={!amount || !expenseType}
+              >
+                <Text style={styles.nextButtonText}>Continue</Text>
+              </TouchableOpacity>
+            </GlassCard>
+
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <Text style={styles.backButtonText}>Cancel</Text>
+            </TouchableOpacity>
           </Animated.View>
         </ScrollView>
-      </LinearGradient>
-    </KeyboardAvoidingView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  gradientBackground: {
+  container: {
     flex: 1,
+    backgroundColor: '#020617',
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
+    paddingTop: 40,
+    paddingBottom: 40,
   },
-  formContainer: {
-    width: "90%",
-    borderRadius: 16,
-    padding: 24,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 4,
+  content: {
+    paddingHorizontal: 24,
   },
   title: {
-    fontSize: 24,
-    marginBottom: 16,
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    marginBottom: 24,
+    textAlign: 'center',
   },
-  input: {
-    width: "100%",
-    height: 40,
-    borderColor: "gray",
-    borderWidth: 1,
-    marginBottom: 16,
-    paddingHorizontal: 8,
+  card: {
+    padding: 24,
+    borderRadius: 32,
   },
-  chipsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
+  label: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#94A3B8',
     marginBottom: 12,
-    gap: 2,
+    marginTop: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
   },
-  chip: {
+  inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: '#FFF8E1', // soft light yellow
-    margin: 1,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#FFE0B2', // subtle border
+    borderColor: 'rgba(255, 255, 255, 0.1)',
   },
-  chipSelected: {
-    backgroundColor: '#8e24aa', // purple for selected
-    borderColor: '#8e24aa',
+  currencySymbol: {
+    fontSize: 24,
+    color: '#F8FAFC',
+    marginRight: 8,
+    fontWeight: '600',
   },
-  chipIcon: {
+  input: {
+    flex: 1,
+    height: 56,
+    color: '#F8FAFC',
+    fontSize: 24,
+    fontWeight: '600',
+  },
+  yearInput: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
     fontSize: 18,
-    marginRight: 6,
+    height: 48,
   },
-  chipText: {
-    color: '#222',
-    fontSize: 15,
-    fontWeight: '500',
+  errorText: {
+    color: '#F43F5E',
+    fontSize: 12,
+    marginTop: -8,
+    marginBottom: 16,
   },
-  chipTextSelected: {
+  nextButton: {
+    backgroundColor: '#10B981',
+    height: 56,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 16,
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  disabledButton: {
+    backgroundColor: '#1E293B',
+    shadowOpacity: 0,
+  },
+  nextButtonText: {
     color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  backButton: {
+    marginTop: 24,
+    alignItems: 'center',
+  },
+  backButtonText: {
+    color: '#94A3B8',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

@@ -1,12 +1,29 @@
 import { useQuery } from '@tanstack/react-query';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import React, { useEffect, useMemo } from 'react';
-import { FlatList, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useMemo } from 'react';
+import { FlatList, Modal, SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getExpensesAggregation, type ExpenseFullRow } from '../lib/expenseRatingService';
 import { ExpenseDonutChart } from './components/expenseDonutChart';
+import { ExpenseStackedBarChart } from './components/expenseStackedBarChart';
+import { ExpenseYoYChart } from './components/expenseYoYChart';
+import { GlassCard } from './components/GlassCard';
 import { MonthlyExpenseLineChart } from './components/monthlyExpenseLineChart';
+
+// Maps each expense Type to its sub-type field key in ExpenseFullRow
+const subTypeFieldMap: Record<string, string> = {
+  Food: 'Meal',
+  Drinks: 'Drink',
+  Groceries: 'Grocery',
+  Travel: 'Travel',
+  Shopping: 'Shopping',
+  Utilities: 'Utility',
+  Entertainment: 'Entertainment',
+  Medical: 'Health',
+  Investments: 'Investments',
+};
 
 const expenseSubTypes = [
   'Drinks','Entertainment','Food','Groceries','Medical','Investments','Other','Personal','Shopping','Travel','Utilities'
@@ -15,14 +32,11 @@ const expenseSubTypes = [
 export default function ChartsScreen() {
   const router = useRouter();
   
-  const [fullscreenChart, setFullscreenChart] = React.useState<'line' | 'donut' | null>(null);
-  // Add filter state for types
+  const [fullscreenChart, setFullscreenChart] = React.useState<'line' | 'donut' | 'stacked' | 'yoy' | null>(null);
   const [typeFilter, setTypeFilter] = React.useState<string[]>(expenseSubTypes);
-  // Modal state
   const [isModalVisible, setIsModalVisible] = React.useState(false);
   const [modalMode, setModalMode] = React.useState<'start' | 'end'>('start');
 
-  // Default date range state
   const [startMonth, setStartMonth] = React.useState('2023-01');
   const [endMonth, setEndMonth] = React.useState(() => {
     const now = new Date();
@@ -38,19 +52,14 @@ export default function ChartsScreen() {
       const startDate = `${startMonth}-01`;
       const endDate = `${endMonth}-${String(lastDayOfMonth).padStart(2, '0')}`;
       const { data: aggregationData, error } = await getExpensesAggregation(startDate, endDate, typeFilter);
-      if (error) {
-        console.error('Failed to fetch chart data:', error);
-      }
-      // Return full rows directly without redefining Type/Date/Amount
+      if (error) console.error('Failed to fetch chart data:', error);
       return aggregationData || [];
     },
     enabled: false,
   });
   const chartData = useMemo(() => data ?? [], [data]);
 
-  // Add state for line chart date range
   const allMonths = useMemo(()=>{
-    // Generate a list of possible months for the picker, independent of fetched data
     const months = new Set<string>();
     const now = new Date();
     for (let i = 0; i < 36; i++) {
@@ -60,13 +69,6 @@ export default function ChartsScreen() {
     }
     return Array.from(months).sort((a, b) => b.localeCompare(a));
   },[]);
-
-  useEffect(() => {
-    if (allMonths.length > 0 && !endMonth) {
-      setEndMonth(allMonths[0] || ''); // Set to the most recent month
-    }
-  }, [allMonths, endMonth]);
-
 
   const openModal = (mode: 'start' | 'end') => {
     setModalMode(mode);
@@ -84,9 +86,7 @@ export default function ChartsScreen() {
     setIsModalVisible(false);
   };
 
-  // Aggregate month totals, filtered by range and type
   const monthAgg = useMemo(()=>{
-    console.log('Records for aggregation:', chartData.length);
     if (chartData.length === 0) return [];
     const map: Record<string, number> = {};
     chartData.forEach(r=>{
@@ -94,19 +94,15 @@ export default function ChartsScreen() {
         const d = new Date(r.Date);
         const key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         map[key] = (map[key]||0)+r.Amount;
-      } else {
-        console.log('Skipping type', r.Type);
       }
     });
     const entries = Object.entries(map).sort(([a],[b])=> a.localeCompare(b));
-    // Filter by start/end
     const startIdx = entries.findIndex(([k])=>k===startMonth);
     const endIdx = entries.findIndex(([k])=>k===endMonth);
     if (startIdx === -1 || endIdx === -1) return entries;
     return entries.slice(Math.min(startIdx,endIdx), Math.max(startIdx,endIdx)+1);
   },[chartData, startMonth, endMonth, typeFilter]);
 
-  // Aggregate by type, filtered
   const typeAgg = useMemo(()=>{
     if (chartData.length === 0) return [];
     const map: Record<string, number> = {};
@@ -114,48 +110,78 @@ export default function ChartsScreen() {
     return Object.entries(map).sort((a,b)=> b[1]-a[1]);
   },[chartData, typeFilter]);
 
-  const singleSelectedType = useMemo(()=> typeFilter.length === 1 ? typeFilter[0] : null, [typeFilter]);
-
-  // Build subtype aggregation when a single type is selected
-  const subtypeAgg = useMemo(() => {
-    if (!singleSelectedType) return [] as [string, number][];
-    // Map expense Type to possible subtype field names in data
-    const subtypeFieldMap: Record<string, string[]> = {
-      Food: ['Meal'],
-      Drinks: ['Drink'],
-      Groceries: ['Grocery'],
-      Travel: ['Travel'],
-      Shopping: ['Shopping'],
-      Utilities: ['Utility'],
-      Entertainment: ['Entertainment'],
-      Medical: ['Health'],
-      Investments: ['Investments'],
-      Personal: [],
-      Other: []
-    };
-    const fields = subtypeFieldMap[singleSelectedType] || [];
-    if (!fields.length) return [];
+  // When exactly 1 category is selected, break donut down by sub-type
+  const isSingleCategory = typeFilter.length === 1;
+  const donutAgg = useMemo(() => {
+    if (!isSingleCategory || chartData.length === 0) return typeAgg;
+    const category = typeFilter[0];
+    const field = subTypeFieldMap[category];
+    if (!field) return typeAgg; // no sub-type mapping, fall back
     const map: Record<string, number> = {};
     chartData.forEach(r => {
-      if (r.Type !== singleSelectedType) return;
-      // Use first non-empty field among the list as label priority
-      let label: string | undefined;
-      for (const f of fields) {
-        const val = (r as any)[f];
-        if (val && typeof val === 'string') { label = val; break; }
-      }
-      if (!label) label = singleSelectedType;
-      map[label] = (map[label] || 0) + r.Amount;
+      if (r.Type !== category) return;
+      const subVal = (r as any)[field] as string | undefined;
+      const key = subVal || 'Unknown';
+      map[key] = (map[key] || 0) + r.Amount;
     });
-    return Object.entries(map).sort((a,b)=> b[1]-a[1]);
-  }, [chartData, singleSelectedType]);
+    return Object.entries(map).sort((a, b) => b[1] - a[1]);
+  }, [chartData, typeFilter, isSingleCategory, typeAgg]);
 
-  const donutDataToUse = singleSelectedType && subtypeAgg.length > 0 ? subtypeAgg : typeAgg;
-  const donutTitle = singleSelectedType && subtypeAgg.length > 0 ? `${singleSelectedType} Spread` : 'Expense Type Breakdown';
-  const legendLabel = singleSelectedType && subtypeAgg.length > 0 ? 'Subtypes' : 'Types';
+  const donutTitle = isSingleCategory ? `${typeFilter[0]} — Sub-type Breakdown` : 'Expense Breakdown';
+  const donutLegend = isSingleCategory ? 'Sub-types' : 'Types';
 
-  // Orientation handling only for line chart now
-  const enterFullscreen = async (type: 'line' | 'donut') => {
+  // Stacked bar data: month -> { category/sub-type -> amount }
+  const monthCategoryAgg = useMemo(() => {
+    if (chartData.length === 0) return [];
+    const map: Record<string, Record<string, number>> = {};
+    if (isSingleCategory) {
+      const category = typeFilter[0];
+      const field = subTypeFieldMap[category];
+      chartData.forEach(r => {
+        if (r.Type !== category) return;
+        const d = new Date(r.Date);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (!map[key]) map[key] = {};
+        const subVal = field ? ((r as any)[field] as string | undefined) || 'Unknown' : r.Type;
+        map[key][subVal] = (map[key][subVal] || 0) + r.Amount;
+      });
+    } else {
+      chartData.forEach(r => {
+        if (!typeFilter.includes(r.Type)) return;
+        const d = new Date(r.Date);
+        const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        if (!map[key]) map[key] = {};
+        map[key][r.Type] = (map[key][r.Type] || 0) + r.Amount;
+      });
+    }
+    const entries = Object.entries(map).sort(([a], [b]) => a.localeCompare(b));
+    const startIdx = entries.findIndex(([k]) => k === startMonth);
+    const endIdx = entries.findIndex(([k]) => k === endMonth);
+    if (startIdx === -1 || endIdx === -1) return entries;
+    return entries.slice(Math.min(startIdx, endIdx), Math.max(startIdx, endIdx) + 1);
+  }, [chartData, startMonth, endMonth, typeFilter, isSingleCategory]);
+
+  const activeCategories = useMemo(() => {
+    const set = new Set<string>();
+    monthCategoryAgg.forEach(([, cats]) => Object.keys(cats).forEach(c => set.add(c)));
+    if (isSingleCategory) return Array.from(set).sort();
+    return expenseSubTypes.filter(t => set.has(t));
+  }, [monthCategoryAgg, isSingleCategory]);
+
+  // YoY: fetch ALL data for the single selected category (ignores date range)
+  const { data: yoyData } = useQuery<ExpenseFullRow[]>({
+    queryKey: ['yoyData', typeFilter],
+    queryFn: async () => {
+      if (!isSingleCategory) return [];
+      const { data: rows, error } = await getExpensesAggregation('2000-01-01', '2099-12-31', [typeFilter[0]]);
+      if (error) console.error('Failed to fetch YoY data:', error);
+      return rows || [];
+    },
+    enabled: isSingleCategory && chartData.length > 0,
+  });
+  const yoyChartData = useMemo(() => yoyData ?? [], [yoyData]);
+
+  const enterFullscreen = async (type: 'line' | 'donut' | 'stacked' | 'yoy') => {
     setFullscreenChart(type);
     if (type === 'line') {
       try { await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE); } catch {}
@@ -172,181 +198,153 @@ export default function ChartsScreen() {
   if (fullscreenChart) {
     const isLine = fullscreenChart==='line';
     return (
-      <LinearGradient colors={['#0f2027','#203a43']} style={{ flex:1 }}>
-        {isLine ? (
-          <MonthlyExpenseLineChart monthAgg={monthAgg} onClose={exitFullscreen} />
-        ) : (
-          <ExpenseDonutChart typeAgg={donutDataToUse} onClose={exitFullscreen} title={donutTitle} legendLabel={legendLabel} />
-        )}
-      </LinearGradient>
+      <View style={{ flex: 1 }}>
+        <StatusBar hidden />
+        <LinearGradient colors={['#0F172A','#020617']} style={{ flex:1 }}>
+          {isLine ? (
+            <MonthlyExpenseLineChart monthAgg={monthAgg} onClose={exitFullscreen} />
+          ) : fullscreenChart === 'donut' ? (
+            <ExpenseDonutChart typeAgg={donutAgg} onClose={exitFullscreen} title={donutTitle} legendLabel={donutLegend} />
+          ) : fullscreenChart === 'stacked' ? (
+            <ExpenseStackedBarChart monthCategoryAgg={monthCategoryAgg} categories={activeCategories} onClose={exitFullscreen} />
+          ) : (
+            <ExpenseYoYChart data={yoyChartData} category={typeFilter[0] || ''} onClose={exitFullscreen} />
+          )}
+        </LinearGradient>
+      </View>
     );
   }
 
   return (
-    <LinearGradient colors={['#141E30','#243B55']} style={{ flex:1, paddingTop: 60 }}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 80 }}>
-        <Text style={{ color:'#fff', fontSize:26, fontWeight:'700', textAlign:'center', marginBottom:24 }}>Expense Charts</Text>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient colors={['#0F172A','#020617']} style={StyleSheet.absoluteFill} />
+      <SafeAreaView style={{ flex: 1 }}>
+        <ScrollView contentContainerStyle={{ padding: 24, paddingBottom: 80 }}>
+          <Text style={styles.title}>Financial Insights</Text>
 
-        {/* FILTERS MOVED HERE */}
-        <Text style={{ color:'#90CAF9', fontSize:16, marginBottom:8 }}>Filters</Text>
-        
-        {/* Date range filter for line chart */}
-        <View style={{ marginBottom:18, backgroundColor: '#1E2A38', padding: 16, borderRadius: 14 }}>
-          <Text style={{ color:'#fff', fontSize:15, fontWeight:'600', marginBottom:12 }}>Line Chart Date Range</Text>
-          <View style={{ flexDirection:'row', gap:16, justifyContent: 'space-around' }}>
-            <View style={{ alignItems:'center', gap:4 }}>
-              <Text style={{ color:'#90CAF9', fontSize:13 }}>Start Month</Text>
-              <View style={{ backgroundColor:'#263238', borderRadius:8, paddingHorizontal:12, paddingVertical:6 }}>
-                <TouchableOpacity onPress={()=>openModal('start')}>
-                  <Text style={{ color:'#fff', fontSize:14, fontWeight: '600' }}>{startMonth}</Text>
+          <GlassCard style={styles.filterCard} intensity={20}>
+            <Text style={styles.sectionLabel}>Date Range</Text>
+            <View style={styles.dateRangeRow}>
+              <TouchableOpacity style={styles.dateButton} onPress={()=>openModal('start')}>
+                <Text style={styles.dateButtonLabel}>Start</Text>
+                <Text style={styles.dateButtonValue}>{startMonth}</Text>
+              </TouchableOpacity>
+              <View style={styles.dateDivider} />
+              <TouchableOpacity style={styles.dateButton} onPress={()=>openModal('end')}>
+                <Text style={styles.dateButtonLabel}>End</Text>
+                <Text style={styles.dateButtonValue}>{endMonth}</Text>
+              </TouchableOpacity>
+            </View>
+
+            <Text style={[styles.sectionLabel, { marginTop: 20 }]}>Categories</Text>
+            <View style={styles.chipGrid}>
+              {expenseSubTypes.map(type => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.chip, typeFilter.includes(type) && styles.chipActive]}
+                  onPress={()=> setTypeFilter(f => f.includes(type) ? f.filter(t=>t!==type) : [...f, type])}
+                >
+                  <Text style={[styles.chipText, typeFilter.includes(type) && styles.chipTextActive]}>{type}</Text>
                 </TouchableOpacity>
-              </View>
+              ))}
             </View>
-            <View style={{ alignItems:'center', gap:4 }}>
-              <Text style={{ color:'#90CAF9', fontSize:13 }}>End Month</Text>
-              <View style={{ backgroundColor:'#263238', borderRadius:8, paddingHorizontal:12, paddingVertical:6 }}>
-                <TouchableOpacity onPress={()=>openModal('end')}>
-                  <Text style={{ color:'#fff', fontSize:14, fontWeight: '600' }}>{endMonth}</Text>
+
+            <TouchableOpacity onPress={() => refetch()} disabled={isLoading} style={styles.generateButton}>
+              <Text style={styles.generateButtonText}>{isLoading ? 'Analyzing...' : 'Generate Report'}</Text>
+            </TouchableOpacity>
+          </GlassCard>
+
+          {chartData.length > 0 && (
+            <View style={styles.chartGrid}>
+              <TouchableOpacity style={styles.chartItem} onPress={()=>enterFullscreen('line')}>
+                <GlassCard style={styles.chartInner} intensity={15}>
+                  <Text style={styles.chartIcon}>📈</Text>
+                  <Text style={styles.chartTitle}>Monthly Trend</Text>
+                </GlassCard>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.chartItem} onPress={()=>enterFullscreen('donut')}>
+                <GlassCard style={styles.chartInner} intensity={15}>
+                  <Text style={styles.chartIcon}>🍩</Text>
+                  <Text style={styles.chartTitle}>{isSingleCategory ? `${typeFilter[0]} Sub-types` : 'Expense Spread'}</Text>
+                </GlassCard>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.chartItem} onPress={()=>enterFullscreen('stacked')}>
+                <GlassCard style={styles.chartInner} intensity={15}>
+                  <Text style={styles.chartIcon}>📊</Text>
+                  <Text style={styles.chartTitle}>{isSingleCategory ? `${typeFilter[0]} Sub-type Stack` : 'Stacked Breakdown'}</Text>
+                </GlassCard>
+              </TouchableOpacity>
+              {isSingleCategory && (
+                <TouchableOpacity style={styles.chartItem} onPress={()=>enterFullscreen('yoy')}>
+                  <GlassCard style={styles.chartInner} intensity={15}>
+                    <Text style={styles.chartIcon}>📅</Text>
+                    <Text style={styles.chartTitle}>{typeFilter[0]} Year over Year</Text>
+                  </GlassCard>
                 </TouchableOpacity>
-              </View>
+              )}
             </View>
-          </View>
-        </View>
+          )}
 
-        {/* Filter UI for Expense Spread */}
-        <View style={{ marginBottom:24, backgroundColor: '#1E2A38', padding: 16, borderRadius: 14 }}>
-          <Text style={{ color:'#fff', fontSize:15, fontWeight:'600', marginBottom:12 }}>Filter Expense Types</Text>
-          <View style={{ flexDirection:'row', flexWrap:'wrap', gap:8 }}>
-            {expenseSubTypes.map(type => (
-              <TouchableOpacity
-                key={type}
-                style={{ backgroundColor: typeFilter.includes(type) ? '#42A5F5' : '#263238', borderRadius:8, paddingHorizontal:10, paddingVertical:6 }}
-                onPress={()=> setTypeFilter(f => f.includes(type) ? f.filter(t=>t!==type) : [...f, type])}
-              >
-                <Text style={{ color: typeFilter.includes(type) ? '#fff' : '#90CAF9', fontSize:13 }}>{type}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
+          <TouchableOpacity onPress={()=>router.back()} style={styles.backButton}>
+            <Text style={styles.backButtonText}>Back to Dashboard</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
 
-        {/* BUTTON MOVED HERE */}
-        <TouchableOpacity onPress={() => refetch()} disabled={isLoading} style={styles.fetchButton}>
-          <Text style={styles.fetchButtonText}>{isLoading ? 'Generating...' : 'Generate Chart Data'}</Text>
-        </TouchableOpacity>
-
-        {/* CHART PREVIEWS - RENDERED CONDITIONALLY */}
-        {chartData.length > 0 && (
-          <>
-            <Text style={{ color:'#90CAF9', fontSize:16, marginBottom:8, marginTop: 24 }}>Charts</Text>
-            <View style={{ flexDirection:'row', flexWrap:'wrap', gap:16, marginBottom:32 }}>
-              <TouchableOpacity style={{ width:'48%', backgroundColor:'#1E2A38', borderRadius:14, padding:16, alignItems:'center', justifyContent:'center', height:180 }} onPress={()=>enterFullscreen('line')}>
-                <Text style={{ color:'#fff', fontSize:16, fontWeight:'600', marginBottom:8 }}>Monthly Line</Text>
-                <View style={{ width:80, height:80, backgroundColor:'#263238', borderRadius:8, alignItems:'center', justifyContent:'center' }}>
-                  <Text style={{ color:'#90CAF9', fontSize:32 }}>📈</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity style={{ width:'48%', backgroundColor:'#1E2A38', borderRadius:14, padding:16, alignItems:'center', justifyContent:'center', height:180 }} onPress={()=>enterFullscreen('donut')}>
-                <Text style={{ color:'#fff', fontSize:16, fontWeight:'600', marginBottom:8 }}>Expense Spread</Text>
-                <View style={{ width:80, height:80, backgroundColor:'#263238', borderRadius:40, alignItems:'center', justifyContent:'center' }}>
-                  <Text style={{ color:'#FFA726', fontSize:32 }}>🍩</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-        <TouchableOpacity onPress={()=>router.back()} style={{ alignSelf:'center', marginTop: chartData.length > 0 ? 0 : 24 }}>
-          <Text style={{ color:'#fff', textDecorationLine:'underline', fontSize:16 }}>Back</Text>
-        </TouchableOpacity>
-      </ScrollView>
-      <Modal
-        animationType="fade"
-        transparent={true}
-        visible={isModalVisible}
-        onRequestClose={() => setIsModalVisible(false)}
-      >
-        <View style={styles.modalContainer}>
-          <View style={styles.modalContent}>
+      <Modal animationType="fade" transparent={true} visible={isModalVisible} onRequestClose={() => setIsModalVisible(false)}>
+        <BlurView intensity={80} tint="dark" style={styles.modalOverlay}>
+          <GlassCard style={styles.modalContent} intensity={40}>
             <Text style={styles.modalTitle}>Select {modalMode === 'start' ? 'Start' : 'End'} Month</Text>
             <FlatList
               data={allMonths}
               keyExtractor={item => item}
-              initialNumToRender={12}
-              maxToRenderPerBatch={12}
-              renderItem={({ item }) => {
-                const isSelected = item === startMonth || item === endMonth;
-                const isStart = item === startMonth;
-                const isEnd = item === endMonth;
-                return (
-                  <TouchableOpacity style={styles.monthItem} onPress={() => handleMonthSelect(item)}>
-                    <Text style={[styles.monthText, isSelected && styles.selectedMonthText]}>
-                      {item}
-                      {isStart && isEnd ? ' (Start & End)' : isStart ? ' (Start)' : isEnd ? ' (End)' : ''}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              }}
-              style={{ width: '100%' }}
+              renderItem={({ item }) => (
+                <TouchableOpacity style={styles.monthItem} onPress={() => handleMonthSelect(item)}>
+                  <Text style={[styles.monthText, (item === startMonth || item === endMonth) && styles.selectedMonthText]}>{item}</Text>
+                </TouchableOpacity>
+              )}
             />
             <TouchableOpacity style={styles.closeButton} onPress={() => setIsModalVisible(false)}>
-              <Text style={{ color: '#90CAF9' }}>Close</Text>
+              <Text style={styles.closeButtonText}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </GlassCard>
+        </BlurView>
       </Modal>
-    </LinearGradient>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  modalContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.7)',
-  },
-  modalContent: {
-    backgroundColor: '#1E2A38',
-    borderRadius: 14,
-    padding: 20,
-    width: '80%',
-    maxHeight: '70%',
-    alignItems: 'center',
-  },
-  modalTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-    marginBottom: 16,
-  },
-  monthItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#263238',
-    width: '100%',
-    alignItems: 'center',
-  },
-  monthText: {
-    color: '#CFD8DC',
-    fontSize: 16,
-  },
-  selectedMonthText: {
-    color: '#42A5F5',
-    fontWeight: 'bold',
-  },
-  closeButton: {
-    marginTop: 16,
-  },
-  fetchButton: {
-    backgroundColor: '#42A5F5',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  fetchButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  }
+  container: { flex: 1, backgroundColor: '#020617' },
+  title: { fontSize: 32, fontWeight: '800', color: '#F8FAFC', textAlign: 'center', marginBottom: 24 },
+  filterCard: { padding: 20, borderRadius: 24 },
+  sectionLabel: { fontSize: 12, fontWeight: '700', color: '#64748B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
+  dateRangeRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 4 },
+  dateButton: { flex: 1, padding: 12, alignItems: 'center' },
+  dateButtonLabel: { fontSize: 10, color: '#64748B', marginBottom: 2 },
+  dateButtonValue: { fontSize: 16, fontWeight: '700', color: '#F8FAFC' },
+  dateDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.1)' },
+  chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  chipActive: { backgroundColor: '#10B981', borderColor: '#10B981' },
+  chipText: { fontSize: 13, color: '#94A3B8', fontWeight: '600' },
+  chipTextActive: { color: '#fff' },
+  generateButton: { backgroundColor: '#3B82F6', height: 50, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginTop: 24 },
+  generateButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  chartGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 24 },
+  chartItem: { width: '47%' },
+  chartInner: { height: 140, justifyContent: 'center', alignItems: 'center' },
+  chartIcon: { fontSize: 32, marginBottom: 8 },
+  chartTitle: { fontSize: 14, fontWeight: '700', color: '#F8FAFC' },
+  backButton: { marginTop: 40, alignSelf: 'center' },
+  backButtonText: { color: '#64748B', fontSize: 16, fontWeight: '600', textDecorationLine: 'underline' },
+  modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  modalContent: { width: '100%', maxHeight: '70%', padding: 24 },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: '#F8FAFC', marginBottom: 20, textAlign: 'center' },
+  monthItem: { paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)', alignItems: 'center' },
+  monthText: { fontSize: 16, color: '#94A3B8' },
+  selectedMonthText: { color: '#10B981', fontWeight: '800' },
+  closeButton: { marginTop: 16, alignItems: 'center' },
+  closeButtonText: { color: '#3B82F6', fontSize: 16, fontWeight: '700' }
 });
