@@ -296,7 +296,8 @@ export async function getMonthlyTotal(monthName: string, year: string): Promise<
   if (monthIndex === -1) return 0;
 
   const startDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
-  const endDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-31`;
+  const lastDay = new Date(Number(year), monthIndex + 1, 0).getDate();
+  const endDate = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
 
   const { data, error } = await supabase
     .from('expenses')
